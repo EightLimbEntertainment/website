@@ -1,0 +1,200 @@
+{
+  "BarrattsPoster-4.10.24.webp": {
+    "primary": "#5d0d17",
+    "secondary": "#d9c8b4",
+    "text": "#d9c8b4",
+    "font": "Abril Fatface",
+    "fontCss": "'Abril Fatface', 'Cormorant Garamond', Georgia, serif",
+    "textOnPrimary": "#fff",
+    "textOnSecondary": "#111"
+  },
+  "BenJennings-14-.webp": {
+    "primary": "#8e8a6c",
+    "secondary": "#c9c5ad",
+    "text": "#c9c5ad",
+    "font": "Bebas Neue",
+    "fontCss": "'Bebas Neue', 'Cormorant Garamond', Georgia, serif",
+    "textOnPrimary": "#fff",
+    "textOnSecondary": "#111"
+  },
+  "BenJennings-26.4.24.webp": {
+    "primary": "#1789b3",
+    "secondary": "#a2b2bc",
+    "text": "#a2b2bc",
+    "font": "Bowlby One",
+    "fontCss": "'Bowlby One', 'Cormorant Garamond', Georgia, serif",
+    "textOnPrimary": "#fff",
+    "textOnSecondary": "#111"
+  },
+  "DamnTeeth-3-.webp": {
+    "primary": "#f2fa0b",
+    "secondary": "#c3d3da",
+    "text": "#c3d3da",
+    "font": "Bowlby One",
+    "fontCss": "'Bowlby One', 'Cormorant Garamond', Georgia, serif",
+    "textOnPrimary": "#111",
+    "textOnSecondary": "#111"
+  },
+  "EdDowie-13-.webp": {
+    "primary": "#443c44",
+    "secondary": "#c4bcc4",
+    "text": "#c4bcc4",
+    "font": "Special Elite",
+    "fontCss": "'Special Elite', 'Cormorant Garamond', Georgia, serif",
+    "textOnPrimary": "#fff",
+    "textOnSecondary": "#111"
+  },
+  "EdDowie-4-.webp": {
+    "primary": "#f7c08e",
+    "secondary": "#7c9cbc",
+    "text": "#7c9cbc",
+    "font": "Bowlby One",
+    "fontCss": "'Bowlby One', 'Cormorant Garamond', Georgia, serif",
+    "textOnPrimary": "#111",
+    "textOnSecondary": "#111"
+  },
+  "EdDowie-8-.webp": {
+    "primary": "#f1ec5e",
+    "secondary": "#ded1c0",
+    "text": "#ded1c0",
+    "font": "Bowlby One",
+    "fontCss": "'Bowlby One', 'Cormorant Garamond', Georgia, serif",
+    "textOnPrimary": "#111",
+    "textOnSecondary": "#111"
+  },
+  "FollyGroup-15-.webp": {
+    "primary": "#095884",
+    "secondary": "#d3e1e4",
+    "text": "#d3e1e4",
+    "font": "Bowlby One",
+    "fontCss": "'Bowlby One', 'Cormorant Garamond', Georgia, serif",
+    "textOnPrimary": "#fff",
+    "textOnSecondary": "#111"
+  },
+  "FollyGroup-16-.webp": {
+    "primary": "#040c04",
+    "secondary": "#c4ccc4",
+    "text": "#c4ccc4",
+    "font": "Anton",
+    "fontCss": "'Anton', 'Cormorant Garamond', Georgia, serif",
+    "textOnPrimary": "#fff",
+    "textOnSecondary": "#111"
+  },
+  "GirlsInSynthesis-1-.webp": {
+    "primary": "#285287",
+    "secondary": "#9ac4c7",
+    "text": "#9ac4c7",
+    "font": "Anton",
+    "fontCss": "'Anton', 'Cormorant Garamond', Georgia, serif",
+    "textOnPrimary": "#fff",
+    "textOnSecondary": "#111"
+  },
+  "GirlsInSynthesis-11-.webp": {
+    "primary": "#1e6743",
+    "secondary": "#c2b8b7",
+    "text": "#c2b8b7",
+    "font": "Anton",
+    "fontCss": "'Anton', 'Cormorant Garamond', Georgia, serif",
+    "textOnPrimary": "#fff",
+    "textOnSecondary": "#111"
+  },
+  "GirlsInSynthesis-7-.webp": {
+    "primary": "#c02729",
+    "secondary": "#c3c4bc",
+    "text": "#c3c4bc",
+    "font": "Bowlby One",
+    "fontCss": "'Bowlby One', 'Cormorant Garamond', Georgia, serif",
+    "textOnPrimary": "#fff",
+    "textOnSecondary": "#111"
+  },
+  "LowGirlSinglesGig.webp": {
+    "primary": "#4b9d80",
+    "secondary": "#bfd2d0",
+    "text": "#bfd2d0",
+    "font": "Cormorant Garamond",
+    "fontCss": "'Cormorant Garamond', 'Cormorant Garamond', Georgia, serif",
+    "textOnPrimary": "#fff",
+    "textOnSecondary": "#111"
+  },
+  "PhantomIsle-12-.webp": {
+    "primary": "#e47736",
+    "secondary": "#d49ca8",
+    "text": "#d49ca8",
+    "font": "Bowlby One",
+    "fontCss": "'Bowlby One', 'Cormorant Garamond', Georgia, serif",
+    "textOnPrimary": "#fff",
+    "textOnSecondary": "#111"
+  },
+  "SarpaSalpa-9-.webp": {
+    "primary": "#196262",
+    "secondary": "#9dcdcb",
+    "text": "#9dcdcb",
+    "font": "Anton",
+    "fontCss": "'Anton', 'Cormorant Garamond', Georgia, serif",
+    "textOnPrimary": "#fff",
+    "textOnSecondary": "#111"
+  },
+  "ThomasTruax12.4.25.webp": {
+    "primary": "#d4822d",
+    "secondary": "#a8c5cf",
+    "text": "#a8c5cf",
+    "font": "Bowlby One",
+    "fontCss": "'Bowlby One', 'Cormorant Garamond', Georgia, serif",
+    "textOnPrimary": "#111",
+    "textOnSecondary": "#111"
+  },
+  "ThomasTruax9.3.24.webp": {
+    "primary": "#192a39",
+    "secondary": "#bba99f",
+    "text": "#bba99f",
+    "font": "Cormorant Garamond",
+    "fontCss": "'Cormorant Garamond', 'Cormorant Garamond', Georgia, serif",
+    "textOnPrimary": "#fff",
+    "textOnSecondary": "#111"
+  },
+  "Truax-10-.webp": {
+    "primary": "#089ff5",
+    "secondary": "#b2b4ba",
+    "text": "#b2b4ba",
+    "font": "Bowlby One",
+    "fontCss": "'Bowlby One', 'Cormorant Garamond', Georgia, serif",
+    "textOnPrimary": "#fff",
+    "textOnSecondary": "#111"
+  },
+  "Truax-2-.webp": {
+    "primary": "#a76e63",
+    "secondary": "#a9d8da",
+    "text": "#a9d8da",
+    "font": "Bebas Neue",
+    "fontCss": "'Bebas Neue', 'Cormorant Garamond', Georgia, serif",
+    "textOnPrimary": "#fff",
+    "textOnSecondary": "#111"
+  },
+  "WHLung8.11.25.webp": {
+    "primary": "#ea4d24",
+    "secondary": "#c1bfbf",
+    "text": "#c1bfbf",
+    "font": "Bowlby One",
+    "fontCss": "'Bowlby One', 'Cormorant Garamond', Georgia, serif",
+    "textOnPrimary": "#fff",
+    "textOnSecondary": "#111"
+  },
+  "WorkingMensClub-5-.webp": {
+    "primary": "#fc6b6b",
+    "secondary": "#dcb4bc",
+    "text": "#dcb4bc",
+    "font": "Bowlby One",
+    "fontCss": "'Bowlby One', 'Cormorant Garamond', Georgia, serif",
+    "textOnPrimary": "#fff",
+    "textOnSecondary": "#111"
+  },
+  "zeropolis-6-.webp": {
+    "primary": "#ccb09c",
+    "secondary": "#90acd0",
+    "text": "#90acd0",
+    "font": "Bebas Neue",
+    "fontCss": "'Bebas Neue', 'Cormorant Garamond', Georgia, serif",
+    "textOnPrimary": "#111",
+    "textOnSecondary": "#111"
+  }
+}

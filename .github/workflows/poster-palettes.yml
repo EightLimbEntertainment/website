@@ -1,0 +1,49 @@
+name: Regenerate poster palettes
+
+# When a poster is added, replaced, or removed (or when the extraction /
+# injection scripts themselves change), regenerate
+# index/pictures/posters/palettes.json AND re-inject the per-event CSS
+# variables on every event HTML page. Commits any changes back.
+
+on:
+  push:
+    paths:
+      - 'index/pictures/posters/**'
+      - 'scripts/extract-poster-palettes.mjs'
+      - 'scripts/inject-poster-palettes.mjs'
+      - '.github/workflows/poster-palettes.yml'
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install deps
+        run: npm install --no-save sharp node-vibrant
+
+      - name: Extract palettes
+        run: node scripts/extract-poster-palettes.mjs
+
+      - name: Inject per-event palette vars
+        run: node scripts/inject-poster-palettes.mjs
+
+      - name: Commit changes if any
+        run: |
+          git config --local user.name  "github-actions[bot]"
+          git config --local user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add index/pictures/posters/palettes.json events/*.html
+          if git diff --cached --quiet; then
+            echo "No palette changes"
+            exit 0
+          fi
+          git commit -m "chore(palettes): regenerate poster palettes [skip ci]"
+          git push

@@ -4,48 +4,169 @@
    Page-specific rules live in styles.css / events.css / vinyl.css
    ============================================================= */
 
-/* DESIGN TOKENS — light mode (default) */
+/* DESIGN TOKENS — synced with eight-limb-entertainment-design-system */
 :root {
-  --bg: #ffffff;
-  --fg: #000000;
-  --muted-fg: #555;
-  --header-bg: #ffffff;
-  --footer-bg: #ffffff;
-  --footer-fg: #000000;
-  --footer-muted-fg: #555;
-  --band-bg: #000000;       /* the black events band — stays black in both modes */
-  --band-fg: #ffffff;
-  --accent: #333333;
-  --accent-hover: #555555;
-  --input-bg: #ffffff;
-  --input-fg: #000000;
-  --input-border: #ccc;
-  --shadow-strong: rgba(0, 0, 0, 0.5);
-  --shadow-soft: rgba(0, 0, 0, 0.3);
+  /* ---------- Light Mode Ramp ---------- */
+  --surface-1: #ffffff;     /* panels, header, body */
+  --surface-2: #f4f4f8;     /* wave layer 1 */
+  --surface-3: #e5e5ec;     /* wave layer 2 */
+  --surface-4: #d2d2dd;     /* wave layer 3 */
+  --surface-5: #c0c0cc;     /* wave layer 4 */
+  --surface-6: #1a1a24;     /* dark band, footer */
 
-  /* layout */
-  --header-h: clamp(64px, 10vh, 150px);
-  --wave-h: clamp(48px, 8vh, 70px);
-  --card-img-h: clamp(180px, 25vh, 300px);
-  --vinyl-img-h: clamp(160px, 20vh, 250px);
+  /* ---------- Semantic ---------- */
+  --bg: var(--surface-1);
+  --fg: #111111;
+  --muted-fg: #555555;
+  --header-bg: rgba(255, 255, 255, 0.7);
+  --footer-bg: var(--surface-1);
+  --footer-fg: var(--fg);
+  --footer-muted-fg: var(--muted-fg);
+  --panel-bg: var(--surface-1);
+  --dark-section-bg: var(--surface-6);
+  --dark-section-fg: #ffffff;
+  --band-bg: var(--surface-6);
+  --band-fg: #ffffff;
+
+  /* ---------- Brand accent — RUST (restrained warmth) ---------- */
+  --accent: #a83b2b;
+  --accent-hover: #c34936;
+
+  /* ---------- Forms ---------- */
+  --input-bg: rgba(0, 0, 0, 0.05);
+  --input-fg: var(--fg);
+  --input-border: rgba(0, 0, 0, 0.1);
+
+  /* ---------- Shadows ---------- */
+  --shadow-strong: rgba(0, 0, 0, 0.2);
+  --shadow-soft: rgba(0, 0, 0, 0.1);
+  --shadow-card:       drop-shadow(0 4px 10px rgba(0, 0, 0, 0.5));
+  --shadow-card-hover: drop-shadow(0 12px 18px rgba(0, 0, 0, 0.65));
+  --shadow-hero:       0 18px 30px 4px rgba(0, 0, 0, 0.7),
+                       0 0 0 1px rgba(255, 255, 255, 0.08);
+  --shadow-hero-hover: 0 12px 22px 6px rgba(0, 0, 0, 0.75),
+                       0 0 0 1px rgba(255, 255, 255, 0.12);
+  --shadow-vinyl:       drop-shadow(0 14px 18px rgba(0, 0, 0, 0.7))
+                        drop-shadow(0 0 4px rgba(255, 255, 255, 0.08));
+  --shadow-vinyl-hover: drop-shadow(0 10px 14px rgba(0, 0, 0, 0.75))
+                        drop-shadow(0 0 4px rgba(255, 255, 255, 0.12));
+
+  /* ---------- Glassmorphism ---------- */
+  --glass-bg: rgba(0, 0, 0, 0.1);
+  --glass-border: rgba(0, 0, 0, 0.15);
+  --glass-bg-hover: rgba(0, 0, 0, 0.2);
+
+  /* ---------- State accents ---------- */
+  --accent-warn:    #d33;
+  --accent-valid:   lightgreen;
+  --accent-invalid: palevioletred;
+
+  /* ---------- Poster (vintage) palette — print/cream contexts only ---------- */
+  --paper:        #f5edd0;
+  --paper-soft:   #ece2bf;
+  --paper-gold:   #d9b96b;
+  --paper-rust:   #a83b2b;
+  --oxblood:      #4f0d11;
+  --oxblood-deep: #2a0709;
+
+  /* ---------- Layout ---------- */
+  --header-h:      clamp(64px, 10vh, 150px);
+  --wave-h:        clamp(48px, 8vh, 70px);
+  --card-img-h:    clamp(180px, 25vh, 300px);
+  --vinyl-img-h:   clamp(160px, 20vh, 250px);
+  --container-max: 600px;
+  --details-max:   400px;
+
+  /* ---------- Type families ---------- */
+  --font-ui:      "Inter", "Outfit", "Arial", sans-serif;
+  --font-serif:   "Cormorant Garamond", Georgia, serif;
+  --font-display: "Bowlby One", "Impact", "Arial Black", sans-serif;
+  --font-mono:    "Inter", "Arial", sans-serif;
+
+  /* ---------- Type scale ---------- */
+  --size-xs:   0.75rem;
+  --size-sm:   0.875rem;
+  --size-base: 1rem;
+  --size-md:   1.2rem;
+  --size-lg:   1.5rem;
+  --size-xl:   2rem;
+  --size-2xl:  3rem;
+  --size-3xl:  4rem;
+  --size-4xl:  6rem;
+
+  --weight-light: 300;
+  --weight-reg:   400;
+  --weight-med:   500;
+  --weight-semi:  600;
+  --weight-bold:  700;
+  --weight-black: 800;
+
+  --track-tight:  -0.01em;
+  --track-normal: 0;
+  --track-wide:   0.04em;
+  --track-poster: 0.06em;
+
+  --leading-tight: 1.05;
+  --leading-snug:  1.2;
+  --leading-base:  1.45;
+  --leading-loose: 1.7;
+
+  /* ---------- Spacing (4-pt) ---------- */
+  --space-1: 4px;   --space-2: 8px;   --space-3: 12px;
+  --space-4: 16px;  --space-5: 20px;  --space-6: 24px;
+  --space-8: 32px;  --space-10: 40px; --space-12: 48px; --space-16: 64px;
+
+  /* ---------- Radii ---------- */
+  --radius-none: 0;
+  --radius-sm:   5px;
+  --radius-pill: 20px;
+  --radius-full: 9999px;
+
+  /* ---------- Motion ---------- */
+  --ease-out:     ease-out;
+  --ease-inout:   ease-in-out;
+  --ease-premium: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --dur-fast: 0.2s;
+  --dur-base: 0.3s;
+  --dur-slow: 0.5s;
+  --hover-lift: scale(1.05);
 }
 
-/* AUTO DARK — flip a small set of tokens when the OS prefers dark.
-   The black band stays black; events pages are already dark and unaffected. */
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #0e0e0e;
-    --fg: #f2f2f2;
-    --muted-fg: #b8b8b8;
-    --header-bg: #0e0e0e;
-    --footer-bg: #0e0e0e;
-    --footer-fg: #f2f2f2;
-    --footer-muted-fg: #b8b8b8;
-    --accent: #f2f2f2;
-    --accent-hover: #cfcfcf;
-    --input-bg: #1a1a1a;
-    --input-fg: #f2f2f2;
-    --input-border: #444;
+    --surface-1: #0a0a0c;
+    --surface-2: #0e0e13;
+    --surface-3: #121219;
+    --surface-4: #15151e;
+    --surface-5: #181821;
+    --surface-6: #1a1a24;
+
+    --bg: var(--surface-1);
+    --fg: #f4f4f5;
+    --muted-fg: #a1a1aa;
+    --header-bg: rgba(10, 10, 12, 0.7);
+    --footer-bg: var(--surface-1);
+    --footer-fg: var(--fg);
+    --footer-muted-fg: var(--muted-fg);
+    --panel-bg: var(--surface-1);
+    --dark-section-bg: var(--surface-6);
+    --dark-section-fg: #ffffff;
+    --band-bg: var(--surface-6);
+    --band-fg: #ffffff;
+
+    /* Rust accent holds in both modes (per design system) */
+    --accent: #a83b2b;
+    --accent-hover: #c34936;
+
+    --input-bg: rgba(255, 255, 255, 0.05);
+    --input-fg: var(--fg);
+    --input-border: rgba(255, 255, 255, 0.1);
+    --shadow-strong: rgba(0, 0, 0, 0.8);
+    --shadow-soft: rgba(0, 0, 0, 0.4);
+
+    --glass-bg: rgba(255, 255, 255, 0.1);
+    --glass-border: rgba(255, 255, 255, 0.15);
+    --glass-bg-hover: rgba(255, 255, 255, 0.2);
   }
 }
 
@@ -56,22 +177,36 @@
   box-sizing: border-box;
 }
 
-html,
+html {
+  /* The html background paints into the iOS/macOS rubber-band overscroll
+     regions above and below the body. Use the SOLID --bg (not the
+     translucent --header-bg, which renders over the browser's default
+     canvas and shows through as a muted off-colour). Body + footer both
+     also paint --bg, so top + bottom rubber-band match the page.
+     Per-page overrides (e.g. poster-treatment) can swap this. */
+  background: var(--bg);
+  /* Prevent stray horizontal scrollbars on mobile from elements that
+     overflow the viewport (e.g. wave SVGs at small widths). */
+  overflow-x: hidden;
+}
+
 body {
   width: 100%;
   margin: 0;
   padding: 0;
-  font-family: "Inter", "Arial", sans-serif;
+  font-family: "Outfit", "Inter", "Arial", sans-serif;
   background: var(--bg);
   color: var(--fg);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* Sticky footer — body fills viewport, footer pinned to bottom when content is short.
-   Pages whose body is black (events, vinyls, 404) never show a stripe below the footer. */
+/* Sticky footer — body fills viewport, footer pinned to bottom on short pages.
+   Use 100dvh (dynamic viewport height) so iOS Safari's address-bar resize doesn't
+   leave a gap; fall back to 100vh on older browsers. */
 body {
   min-height: 100vh;
+  min-height: 100dvh;
   display: flex;
   flex-direction: column;
 }
@@ -108,8 +243,11 @@ header {
   width: 100%;
   padding: 8px;
   background: var(--header-bg);
+  backdrop-filter: saturate(180%) blur(14px);
+  -webkit-backdrop-filter: saturate(180%) blur(14px);
   height: var(--header-h);
   position: relative;
+  z-index: 5;
 }
 
 .logo {
@@ -117,6 +255,16 @@ header {
   max-height: 150px;
   padding-top: 8px;
   width: auto;
+  transition: transform 0.3s ease;
+}
+.logo:hover {
+  transform: scale(1.05);
+}
+
+@media (prefers-color-scheme: dark) {
+  .logo {
+    content: url("../index/pictures/icons/ELE_Logo_Dark.webp");
+  }
 }
 
 /* SOCIAL ICONS — desktop top-right, mobile centered in footer */
@@ -128,9 +276,28 @@ header {
   text-decoration: none;
 }
 
-.social-media-icons img {
+.social-media-icons img,
+.social-media-icons .social-icon {
   width: auto;
   height: clamp(28px, 4.2vh, 40px);
+  display: block;
+}
+
+/* Inline-SVG variant — picks up colour from the surrounding link. */
+.social-media-icons .social-icon {
+  width: clamp(28px, 4.2vh, 40px);
+}
+.social-media-icons a {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: inherit;
+  transition: transform var(--dur-base) var(--ease-out),
+              color var(--dur-base) var(--ease-out);
+}
+.social-media-icons a:hover,
+.social-media-icons a:focus-visible {
+  transform: scale(1.1);
 }
 
 .social-media-icons.desktop {
@@ -158,37 +325,52 @@ header {
   }
 }
 
-/* WAVE DECORATIONS */
+/* WAVE DECORATIONS
+   The waves are inline <svg> elements whose layers reference --surface-N
+   tokens via fill="var(--surface-N)". They retheme automatically in dark
+   mode.
+
+   The SVGs are TRANSPARENT above their topmost shape — that area should
+   be the same colour as whatever element sits *above* the wave. We fill
+   that transparent strip with --surface-1 (the panel/light side). For
+   waves where the panel is below (e.g. above the map, going dark→light),
+   override on the parent to swap. */
 .top-header-wave {
+  display: block;
   width: 100%;
   height: var(--wave-h);
-  display: block;
-  background-color: var(--bg);
   position: relative;
   z-index: 1;
+  background: var(--surface-1);
 }
 
 .wave-decoration {
+  position: absolute;
   width: 100%;
   height: 30px;
   display: block;
-}
-
-.wave-decoration.top-wave {
-  position: absolute;
-  top: 0;
   left: 0;
   z-index: 1;
+  background: var(--surface-1);
 }
 
-.wave-decoration.bottom-wave {
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  z-index: 1;
+.wave-decoration.top-wave    { top: 0; }
+.wave-decoration.bottom-wave { bottom: 0; }
+
+/* Homepage section divider between events (dark-grey band above) and vinyls
+   (pure-black section below).
+   We retain the original layer variables here to match the top wave,
+   ensuring the gradients and layering are consistent! */
+.bottom-wave-divider {
+  background: transparent;
 }
 
 /* SCROLL-SNAP CARD ROWS (events + vinyls on the homepage) */
+.scroll-container {
+  position: relative;
+  z-index: 2;
+}
+
 .event-cards,
 .vinyl-cards {
   display: flex;
@@ -198,14 +380,32 @@ header {
   scroll-behavior: smooth;
   scroll-snap-type: x mandatory;
   -webkit-overflow-scrolling: touch;
-  padding-right: 25px;
+  /* Top/bottom padding gives the scaled-up (hover) cards room to grow
+     without being clipped by overflow-x:auto's implicit y-clip.
+     Extra left padding so the first card isn't flush against the strip edge. */
+  padding: 18px 25px 18px 32px;
+  /* scroll-snap-align: start otherwise eats this padding by snapping the
+     first card to the content-box origin. scroll-padding-left tells the
+     snap engine to honour the padding. */
+  scroll-padding-left: 32px;
   position: relative;
   z-index: 1;
+}
+
+.event-cards,
+.vinyl-cards {
+  /* Firefox + cross-browser */
+  scrollbar-width: none;
+  /* IE/old Edge */
+  -ms-overflow-style: none;
 }
 
 .event-cards::-webkit-scrollbar,
 .vinyl-cards::-webkit-scrollbar {
   display: none;
+  width: 0;
+  height: 0;
+  background: transparent;
 }
 
 .event,
@@ -233,115 +433,148 @@ footer {
 }
 
 .footer-content h2 {
-  font-size: 1.5rem;
-  margin-bottom: 1px;
-  font-weight: 700;
+  font-family: var(--font-ui);
+  font-size: var(--size-lg);
+  font-weight: var(--weight-bold);
+  letter-spacing: var(--track-wide);
+  margin: 0 0 4px 0;
+  /* Inherit the surrounding footer's color so it works on both the
+     light homepage footer (dark text) and dark detail-page footers (white). */
+  color: inherit;
 }
 
 .footer-content p {
-  font-size: 0.875rem;
-  margin-top: 1px;
-  margin-bottom: 5px;
-  font-weight: 200;
-  color: var(--footer-muted-fg);
+  font-size: var(--size-sm);
+  margin-top: 5px;
+  margin-bottom: 15px;
+  font-weight: var(--weight-light);
+  /* Inherit footer color (white on dark detail pages, dark on light homepage).
+     Pages that want muted text override per page. */
+  color: inherit;
+  opacity: 0.75;
 }
 
-/* MAILCHIMP SIGNUP */
+/* =============================================================
+   MAILCHIMP SIGNUP — design system spec
+   Centered pill input; submit button positioned ABSOLUTELY off
+   the right edge of the input as a small ghost-pill icon button.
+   Matches kit.css `.ele-mc-form` + `.ele-input` + `.ele-btn-pill`.
+   ============================================================= */
 #mc_embed_signup {
   display: flex;
   justify-content: center;
   align-items: center;
-  padding: 10px;
+  padding: 10px 0;
+  background: transparent;
 }
 
 #mc_embed_signup_scroll {
-  display: inline-block;
+  width: 100%;
+  display: flex;
+  justify-content: center;
 }
 
 #mc_embed_signup .mc-field-group,
 #mc-embedded-subscribe-form .mc-field-group {
-  display: inline-flex;
-  align-items: center;
-  justify-content: flex-start;
-  gap: 10px;
   position: relative;
-  width: auto;
+  width: 280px;
+  max-width: calc(100% - 60px);
+  display: block;
+  gap: 0;
 }
 
 #mc_embed_signup .email,
 #mc-embedded-subscribe-form .email {
-  padding: 10px;
-  border: 1px solid var(--input-border);
-  border-radius: 20px;
-  width: 250px;
+  display: block;
+  width: 100%;
+  height: 40px;
+  padding: 0 16px;
   background: var(--input-bg);
   color: var(--input-fg);
-  flex-shrink: 0;
+  border: 1px solid var(--input-border);
+  border-radius: var(--radius-pill);
+  font: inherit;
+  outline: none;
+  text-align: center;
 }
 
+#mc_embed_signup .email::placeholder,
+#mc-embedded-subscribe-form .email::placeholder {
+  color: var(--muted-fg);
+  text-align: center;
+}
+
+/* Ghost-pill submit button — sits just off the right edge of the input. */
 #mc-embedded-subscribe-form .button,
 #mc_embed_signup .button {
-  padding: 10px;
-  border: none;
-  border-radius: 20px;
-  background-color: var(--accent);
-  color: #fff;
-  cursor: pointer;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  flex-shrink: 0;
+  position: absolute;
+  left: 100%;
+  top: 50%;
+  transform: translateY(-50%);
+  margin-left: 10px;
   width: 40px;
-  height: auto;
+  height: 40px;
+  padding: 0;
+  background: transparent;
+  border: 1px solid rgba(0, 0, 0, 0.25);
+  color: var(--fg);
+  border-radius: var(--radius-pill);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: none;
+  transition: transform var(--dur-fast) var(--ease-out),
+              background-color var(--dur-fast) var(--ease-out),
+              border-color var(--dur-fast) var(--ease-out);
 }
 
 #mc-embedded-subscribe-form .button:hover,
 #mc_embed_signup .button:hover {
-  background-color: var(--accent-hover);
+  background: rgba(0, 0, 0, 0.04);
+  border-color: rgba(0, 0, 0, 0.4);
+  transform: translateY(-50%) scale(1.05);
+  box-shadow: none;
+}
+
+@media (prefers-color-scheme: dark) {
+  #mc-embedded-subscribe-form .button,
+  #mc_embed_signup .button {
+    border-color: rgba(255, 255, 255, 0.25);
+    color: #fff;
+  }
+  #mc-embedded-subscribe-form .button:hover,
+  #mc_embed_signup .button:hover {
+    background: rgba(255, 255, 255, 0.06);
+    border-color: rgba(255, 255, 255, 0.4);
+    transform: translateY(-50%) scale(1.05);
+  }
 }
 
 #mc-embedded-subscribe-form .button img,
 #mc_embed_signup .button img {
   display: block;
-  max-width: 100%;
-  max-height: 10px;
+  max-width: 14px;
+  max-height: 14px;
   height: auto;
 }
 
 #mce-error-response,
 #mce-success-response {
   padding: 10px 0;
-  width: 250px;
+  width: 280px;
+  max-width: 100%;
   margin: 0 auto;
+  font-size: var(--size-sm);
 }
 
-#mce-error-response { color: #d33; }
-#mce-success-response { color: green; }
+#mce-error-response { color: var(--accent-warn); }
+#mce-success-response { color: #2da653; }
 
-.invisible-button {
-  visibility: hidden;
-  width: 40px;
-}
+.invisible-button { display: none; }
 
-.valid-email   { background-color: lightgreen; }
-.invalid-email { background-color: palevioletred; }
-
-@media screen and (max-width: 768px) {
-  #mc-embedded-subscribe-form .mc-field-group {
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    gap: 10px;
-  }
-  #mc-embedded-subscribe-form .email {
-    flex: 1;
-    max-width: calc(100% - 58px);
-  }
-  #mc-embedded-subscribe-form .button {
-    max-width: 48px;
-    background-color: var(--accent);
-  }
-}
+.valid-email   { background-color: var(--accent-valid)   !important; color: #111; }
+.invalid-email { background-color: var(--accent-invalid) !important; color: #fff; }
 
 /* SHARED ARROW (events + vinyls horizontal scroll) */
 .arrow {
@@ -350,13 +583,30 @@ footer {
   transform: translateY(-50%);
   cursor: pointer;
   z-index: 10;
-  padding: 5px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+  opacity: 0; /* JS handles hover visibility */
+  padding: 10px; /* Safe clicking area */
 }
 
-.arrow img {
-  width: 25px;
-  height: auto;
-  display: block;
+.arrow:hover {
+  transform: translateY(-50%) scale(1.1);
+}
+
+.chevron-icon {
+  width: 40px;
+  height: 40px;
+  stroke: var(--fg); /* Adapts to light/dark mode */
+  opacity: 0.8;
+  filter: drop-shadow(0 2px 8px var(--glass-border)); /* Soft translucent glow to mimic glass */
+  transition: stroke 0.3s ease, filter 0.3s ease;
+}
+
+.arrow:hover .chevron-icon {
+  opacity: 1;
+  filter: drop-shadow(0 4px 12px var(--glass-border));
 }
 
 .left-arrow  { left: 10px; }
@@ -374,3 +624,4 @@ footer {
     scroll-behavior: auto !important;
   }
 }
+

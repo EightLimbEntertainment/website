@@ -1,9 +1,33 @@
 /* =============================================================
    index.html (homepage) — page-specific styles only.
    Shared rules live in shared.css.
+   Implements the eight-limb-entertainment-design-system spec:
+   site-uniform event cards (5/7 cover), tabular date with top
+   border, clean scale-1.05 hover, rust-accent reserved for
+   newsletter only (not card chrome).
    ============================================================= */
 
-/* The black events band — intentionally always black, both modes */
+/* Homepage footer blends seamlessly into the body background */
+body > footer {
+  background: var(--footer-bg);
+  color: var(--footer-fg);
+}
+body > footer .footer-content p {
+  color: var(--footer-muted-fg);
+}
+
+/* Section divider wave on the homepage sits in normal flow (between sections),
+   not absolute-positioned inside a parent. Override the shared rule. */
+.bottom-wave-divider {
+  position: relative !important;
+  width: 100%;
+  height: var(--wave-h);
+  display: block;
+}
+
+/* -------------------------------------------------------------
+   EVENTS STRIP — always-dark band (`--band-bg`)
+   ------------------------------------------------------------- */
 #events {
   position: relative;
   background: var(--band-bg);
@@ -11,29 +35,34 @@
   z-index: 1;
   margin: 0;
   width: 100%;
+  padding-bottom: 16px;
 }
 
-.events-title {
-  font-family: "Inter", sans-serif;
-  font-size: 1.2rem;
-  font-weight: 300;
-  color: var(--band-fg);
+.events-title,
+.vinyl-title {
+  font-family: var(--font-ui);
+  font-size: var(--size-md);
+  font-weight: var(--weight-light);
   text-align: left;
-  padding: 10px 0 0 20px;
   margin: 0;
+  padding: 10px 0 4px var(--space-5);
   background: transparent;
   z-index: 1;
   position: relative;
 }
+.events-title { color: var(--band-fg); }
+.vinyl-title  { color: var(--fg); }
 
-.event-cards {
-  padding-top: 10px;
-  padding-left: 6px;
-}
-
-/* Vinyls section sits on the page background, so it follows light/dark */
+/* -------------------------------------------------------------
+   VINYLS STRIP
+   ------------------------------------------------------------- */
 #vinyls {
   background: var(--bg);
+  color: var(--fg);
+  padding-bottom: 16px;
+}
+
+#vinyls .vinyl-caption {
   color: var(--fg);
 }
 
@@ -45,86 +74,140 @@
   top: 40%;
 }
 
-.vinyl-title {
-  font-family: "Inter", sans-serif;
-  font-size: 1.2rem;
-  font-weight: 300;
-  color: var(--fg);
-  text-align: left;
-  background: transparent;
-  padding: 0 0 0 20px;
-  margin: 0;
+/* -------------------------------------------------------------
+   EVENT CARD (site-uniform)
+   200px wide, 5:7 poster, semantic band/venue/date type.
+   ------------------------------------------------------------- */
+.event {
+  flex: 0 0 auto;
+  width: 200px;
+  scroll-snap-align: start;
+  cursor: pointer;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  margin: 0 5px;
+  padding: 0;
 }
 
-.vinyl-cards {
-  padding-top: 10px;
+.event .container {
+  display: block;
+  width: 100%;
+  padding: 0;
+  filter: var(--shadow-card);
+  transition: transform var(--dur-base) var(--ease-inout),
+              filter var(--dur-base) var(--ease-inout);
 }
 
-/* Card images */
+.event:hover .container,
+.event .container:hover {
+  transform: var(--hover-lift);
+  filter: var(--shadow-card-hover);
+}
+
+.event .image,
 .event img {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 5 / 7;
+  object-fit: cover;
+  object-position: center top;
+  background: #000;
+}
+
+/* Landscape-poster cards: same height as portrait cards (200 × 7/5 = 280px)
+   but the card width auto-sizes to the poster's natural aspect, so the
+   full landscape image shows instead of being centre-cropped. Width grows
+   horizontally — the card sits wider than its portrait neighbours in the
+   scroll row, which is intentional. */
+.event.event--landscape {
   width: auto;
-  height: var(--card-img-h);
-  object-fit: contain;
+}
+.event.event--landscape .image,
+.event.event--landscape img {
+  width: auto;
+  height: 280px;
+  aspect-ratio: auto;
+}
+
+.event-caption {
+  text-align: center;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.ev-band {
+  font-family: var(--font-ui);
+  font-weight: var(--weight-bold);
+  font-size: 16px;
+  line-height: var(--leading-snug);
+  color: #fff;
+  margin: 12px 0 4px;
+  min-height: 2.4em;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.ev-venue {
+  font-family: var(--font-ui);
+  font-weight: var(--weight-light);
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.7);
+  margin: 0 0 8px;
+  min-height: 1.4em;
+}
+
+.ev-meta {
+  font-family: var(--font-ui);
+  font-size: 10px;
+  font-weight: var(--weight-bold);
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.55);
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
+  padding-top: 8px;
+  margin-top: auto;
+  font-variant-numeric: tabular-nums;
+}
+
+/* -------------------------------------------------------------
+   VINYL CARD
+   ------------------------------------------------------------- */
+.vinyl {
+  flex: 0 0 auto;
+  scroll-snap-align: start;
+  text-align: center;
+  cursor: pointer;
+  padding: 0 8px;
+  margin: 0 5px;
 }
 
 .vinyl img {
   width: auto;
   height: var(--vinyl-img-h);
-  object-fit: contain;
-}
-
-.event,
-.events-title {
-  padding-left: 20px;
-}
-
-.vinyl {
-  padding-left: 20px;
-}
-
-.event-caption {
-  color: var(--band-fg);
-  text-align: center;
-  padding: 5px 0;
-  max-width: 500px;
+  display: block;
   margin: 0 auto;
+  object-fit: contain;
+  filter: var(--shadow-card);
+  transition: transform var(--dur-base) var(--ease-inout),
+              filter var(--dur-base) var(--ease-inout);
+}
+
+.vinyl:hover img {
+  transform: var(--hover-lift);
+  filter: var(--shadow-card-hover);
 }
 
 .vinyl-caption {
+  font-family: var(--font-ui);
+  font-size: var(--size-sm);
   color: var(--fg);
-  text-align: center;
-  padding: 5px 0;
-  max-width: 500px;
+  padding-top: 10px;
+  max-width: 220px;
   margin: 0 auto;
-}
-
-/* Hover container — sized by its child image (height-driven), not stretched */
-.container {
-  position: relative;
-  display: inline-block;
-  height: auto;
-  overflow: visible;
-}
-
-/* Match original specificity (.image, single-class) so .event img / .vinyl img win on width/height */
-.image {
-  opacity: 1;
-  display: block;
-  width: 100%;
-  height: auto;
-  transition: transform 0.3s ease-in-out;
-  backface-visibility: hidden;
-}
-
-.container:hover {
-  transform: scale(1.05);
-  transition: transform 0.3s ease-in-out;
-}
-
-/* Wave decoration between sections — keep visible against both light + dark */
-@media (prefers-color-scheme: dark) {
-  /* The bottom wave SVG has white fill — invert it so it reads correctly on dark bg */
-  main > img[alt*="Wave"] {
-    filter: invert(1);
-  }
+  line-height: var(--leading-base);
 }

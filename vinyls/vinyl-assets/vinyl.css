@@ -3,13 +3,37 @@
    Shared rules live in shared.css.
    ============================================================= */
 
+/* Vinyl pages — top half = light surface, bottom half = dark surface. */
 body {
-  background: #000;
-  color: #fff;
+  background: linear-gradient(
+    to bottom,
+    var(--surface-1) 0,
+    var(--surface-1) 35%,
+    var(--surface-6) 35%,
+    var(--surface-6) 100%
+  );
+  background-attachment: fixed;
+  color: var(--fg);
 }
 
+header {
+  background: var(--surface-1) !important;
+}
+
+.image-vinyl {
+  background: var(--surface-1) !important;
+}
+
+/* Top wave below the image panel: --surface-1 (top, matching panel) →
+   --surface-6 (bottom, matching content). Default token mapping; element
+   background matches the panel. */
+.image-vinyl + .top-header-wave {
+  background: var(--surface-1);
+}
+
+.content-container,
 footer {
-  background: #000;
+  background: var(--surface-6);
   color: #fff;
 }
 
@@ -17,14 +41,14 @@ footer {
   color: #fff;
 }
 
-/* Vinyl hero (white panel that holds the record image) */
+/* Vinyl hero — uses the lightest surface (matches header + topmost wave layer). */
 .image-vinyl {
   padding-top: 25px;
   display: flex;
   justify-content: center;
   align-items: center;
   width: 100%;
-  background-color: #fff;
+  background-color: var(--panel-bg);
   position: relative;
   z-index: 2;
 }
@@ -37,15 +61,14 @@ footer {
   object-fit: contain;
   position: relative;
   z-index: 2;
-  filter: drop-shadow(0 14px 18px rgba(0, 0, 0, 0.55))
-          drop-shadow(0 0 4px rgba(0, 0, 0, 0.25));
-  transition: transform 0.3s ease, filter 0.3s ease;
+  filter: var(--shadow-vinyl);
+  transition: transform var(--dur-base) var(--ease-out),
+              filter var(--dur-base) var(--ease-out);
 }
 
 .image-vinyl img:hover {
-  transform: scale(1.05);
-  filter: drop-shadow(0 10px 14px rgba(0, 0, 0, 0.55))
-          drop-shadow(0 0 4px rgba(0, 0, 0, 0.25));
+  transform: var(--hover-lift);
+  filter: var(--shadow-vinyl-hover);
 }
 
 /* Two-column release info */
@@ -101,9 +124,9 @@ img.check-out:hover {
 .edition  { padding: 20px 0 4px; }
 .size     { padding-bottom: 4px; }
 
-/* Mailchimp on dark body */
+/* Mailchimp on dark body — transparent so it inherits whatever footer bg is */
 #mc_embed_signup {
-  background: #000;
+  background: transparent;
   padding: 15px;
   border-radius: 5px;
 }
@@ -116,7 +139,7 @@ img.check-out:hover {
 }
 
 #mce-EMAIL {
-  background: #000;
+  background: transparent;
   color: #fff;
   border: 1px solid #fff;
 }

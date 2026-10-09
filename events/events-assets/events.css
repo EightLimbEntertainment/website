@@ -3,14 +3,42 @@
    Events pages keep their black character in both light + dark modes.
    ============================================================= */
 
-/* Event pages override page tokens — body stays dark always */
+/* Event pages — top half = light surface (white in light mode, soft grey
+   in dark mode); bottom half = dark surface (black in light mode, soft
+   dark grey in dark mode). */
 body {
-  background: #000;
-  color: #fff;
+  background: linear-gradient(
+    to bottom,
+    var(--surface-1) 0,
+    var(--surface-1) 35%,
+    var(--surface-6) 35%,
+    var(--surface-6) 100%
+  );
+  background-attachment: fixed;
+  color: var(--fg);
 }
 
+header {
+  background: var(--surface-1);
+}
+
+.event-container {
+  background: var(--surface-1);
+  padding-top: 30px;
+  padding-bottom: 30px;
+}
+
+/* Top wave below the hero panel: fades from --surface-1 (top, matching
+   panel) → --surface-6 (bottom, matching details). Default top-wave SVG
+   already paints with layer 1 (lightest) at the top and layer 6 (darkest)
+   at the bottom — no remap needed; just match the element bg to the panel. */
+.event-container + .top-header-wave {
+  background: var(--surface-1);
+}
+
+.event-details-container,
 footer {
-  background: #000;
+  background: var(--surface-6);
   color: #fff;
 }
 
@@ -18,9 +46,45 @@ footer {
   color: #fff;
 }
 
+.map-container {
+  background: var(--surface-6);
+}
+
+/* Top wave above the map: fade black(top, against details)→light(bottom,
+   against Google map). Default top-wave SVG goes light(transparent strip
+   top)→dark(bottom). We need the OPPOSITE direction, so flip vertically.
+   After flip: transparent strip at bottom (= light to match the map),
+   wave shapes at top going from layer 6 (darkest) at the visible-top to
+   layer 1 (lightest) just above the now-bottom transparent strip.
+   Token mapping: layer 1 (visually nearest the bottom transparent strip,
+   ie next to the map) should be light; layer 6 (visually at top, against
+   black details) should be black. */
+.map-container .wave-decoration.top-wave {
+  transform: scaleY(-1);
+  --surface-2: #e8eaed;
+  --surface-3: #b0b0b0;
+  --surface-4: #707070;
+  --surface-5: #2a2a2a;
+  --surface-6: #000000;
+  background: #e8eaed;
+}
+
+/* Bottom wave below the map: white (top, matching map) → fading darker
+   moving down → black (bottom, matching footer). Layer 6 is the thin top
+   strip closest to the map (white); layers progress darker; layer 1 is
+   the bulk extending toward the bottom (black). */
+.map-container .wave-decoration.bottom-wave {
+  --surface-2: #000000;       /* layer 1 — black bulk at the bottom */
+  --surface-3: #2a2a2a;
+  --surface-4: #555555;
+  --surface-5: #909090;
+  --surface-6: #ffffff;       /* layer 6 — white thin strip at the top, against map */
+  background: #000000;        /* transparent strip at bottom = black, matches footer */
+}
+
 /* Mailchimp form on dark body */
 #mc_embed_signup {
-  background: #000;
+  background: transparent;
   padding: 15px;
   border-radius: 5px;
 }
@@ -29,11 +93,19 @@ footer {
   display: flex;
   justify-content: center;
   align-items: center;
+  flex-wrap: wrap;
   gap: 10px;
+}
+/* Error/success message wraps to a new line below the input row so it
+   doesn't shove the centred field off to one side when it appears. */
+#mc_embed_signup_scroll #mce-responses {
+  flex-basis: 100%;
+  text-align: center;
+  margin: 0;
 }
 
 #mce-EMAIL {
-  background: #000;
+  background: transparent;
   color: #fff;
   border: 1px solid #fff;
 }
@@ -47,14 +119,11 @@ footer {
   padding: 10px 20px;
 }
 
-/* Event hero */
+/* Event hero — flex layout (background + padding set above) */
 .event-container {
   display: flex;
   flex-direction: column;
   align-items: center;
-  background-color: #fff;
-  padding-top: 30px;
-  padding-bottom: 30px;
 }
 
 .event-image {
@@ -73,13 +142,14 @@ footer {
   max-height: 400px;
   position: relative;
   z-index: 2;
-  transition: transform 0.3s ease, box-shadow 0.3s ease;
-  box-shadow: 0 18px 30px 4px rgba(0, 0, 0, 0.55);
+  transition: transform var(--dur-base) var(--ease-out),
+              box-shadow var(--dur-base) var(--ease-out);
+  box-shadow: var(--shadow-hero);
 }
 
 .event-image img:hover {
-  transform: scale(1.05);
-  box-shadow: 0 12px 22px 6px rgba(0, 0, 0, 0.6);
+  transform: var(--hover-lift);
+  box-shadow: var(--shadow-hero-hover);
 }
 
 /* Event details */
@@ -112,10 +182,11 @@ footer {
 }
 
 .countdown-timer {
-  color: red;
+  color: var(--accent-warn);
   padding: 10px 0;
   display: block;
   text-align: right;
+  font-variant-numeric: tabular-nums;
 }
 
 .ele-presents-label {
@@ -193,6 +264,7 @@ footer {
   width: 100%;
   height: 250px;
   border: none;
+  display: block;
 }
 
 /* Gallery */
@@ -201,7 +273,7 @@ footer {
   grid-template-columns: repeat(5, 1fr);
   gap: 3px;
   padding: 1rem;
-  background: #000;
+  background: var(--dark-section-bg);
 }
 
 .gallery-item {
@@ -353,4 +425,649 @@ footer {
   .modal .arrow.left  { left: 20px; }
   .modal .arrow.right { right: 20px; }
   .modal video { width: 95%; max-height: 80vh; }
+}
+
+/* =============================================================
+   POSTER TREATMENT (v3) — matches the design-system Poster card.
+   Each event page is themed by colours sampled from its poster:
+     --poster-primary   → background of header, hero, details
+     --poster-secondary → text/title/accent
+
+   The whole top of the page is one continuous coloured panel:
+   header + hero (poster) + details. The wave between hero and
+   details fades primary→primary (invisible) so they read as
+   one block. Below the details, the wave fades primary→dark to
+   meet the map area. Typography mirrors the design-system
+   poster-card: Inter eyebrow, Cormorant serif title, italic
+   subtitle, hairline rule, tabular meta line.
+   ============================================================= */
+
+.poster-treatment header {
+  background: var(--poster-primary, var(--surface-1));
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  color: var(--poster-text, #fff);
+}
+
+/* Logo content-swap — primary is always dark enough to need the white
+   logo variant. */
+.poster-treatment .logo {
+  content: url("../../index/pictures/icons/ELE_Logo_Dark.webp");
+}
+
+.poster-treatment .event-container {
+  background: var(--poster-primary, var(--surface-1));
+}
+
+/* Body split-gradient: top = poster-primary, bottom = dark. */
+/* Solid body fill (not a gradient) so iOS/macOS rubber-band overscroll at
+   the top OR bottom of the page shows the same colour as the header and
+   footer panels — no flash of the dark surface-6 from the base body rule.
+   NOTE: selector is `body.poster-treatment` (no space) because the
+   poster-treatment class lives ON the <body>; `.poster-treatment body`
+   would look for a body descendant of poster-treatment, which never matches. */
+body.poster-treatment {
+  background: var(--poster-primary, var(--surface-1));
+  background-attachment: fixed;
+}
+html:has(body.poster-treatment) {
+  background: var(--poster-primary, var(--surface-1));
+}
+
+/* Wave below hero: INVISIBLE — both sides are --poster-primary, so the
+   hero and details visually merge. The element still exists so structure
+   is unchanged. */
+.poster-treatment .event-container + .top-header-wave {
+  --surface-2: var(--poster-primary);
+  --surface-3: var(--poster-primary);
+  --surface-4: var(--poster-primary);
+  --surface-5: var(--poster-primary);
+  --surface-6: var(--poster-primary);
+  background: var(--poster-primary);
+}
+
+/* DETAILS — cream-paper-style poster treatment, but on --poster-primary
+   with --poster-secondary text. */
+.poster-treatment .event-details-container {
+  background: var(--poster-primary, var(--surface-1));
+  color: var(--poster-text, #fff);
+  padding: 32px 24px 60px;
+  margin: 0;
+}
+
+/* Eyebrow above the title */
+.poster-treatment .ele-presents-label {
+  font-family: var(--font-ui);
+  font-size: var(--size-sm);
+  font-weight: var(--weight-reg);
+  letter-spacing: var(--track-poster);
+  text-transform: uppercase;
+  color: var(--poster-text, #fff);
+  opacity: 0.85;
+  margin: 0 0 8px;
+  padding: 0;
+}
+
+/* Display serif title (band name) */
+.poster-treatment .event-title {
+  font-family: var(--poster-font-display, var(--font-serif));
+  font-weight: var(--weight-bold);
+  font-size: clamp(2.4rem, 7vw, var(--size-3xl));
+  line-height: var(--leading-tight);
+  letter-spacing: var(--track-tight);
+  text-transform: uppercase;
+  color: var(--poster-secondary, #fff);
+  margin: 0 0 14px;
+}
+
+/* Italic serif “Special Guests…” */
+.poster-treatment .special-guests-label {
+  font-family: var(--font-serif);
+  font-weight: var(--weight-med);
+  font-style: italic;
+  font-size: var(--size-md);
+  color: var(--poster-text, #fff);
+  opacity: 0.85;
+  margin: 22px 0 4px;
+  padding: 0;
+}
+
+.poster-treatment .guest-name {
+  font-family: var(--poster-font-display, var(--font-serif));
+  font-weight: var(--weight-bold);
+  font-size: clamp(1.4rem, 4vw, 2rem);
+  line-height: var(--leading-tight);
+  letter-spacing: var(--track-tight);
+  color: var(--poster-secondary, #fff);
+  margin: 0;
+}
+
+/* Venue → small-caps meta line preceded by a hairline rule */
+.poster-treatment .event-venue {
+  font-family: var(--font-ui);
+  font-size: var(--size-sm);
+  font-weight: var(--weight-bold);
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--poster-text, #fff);
+  margin: 24px 0 6px;
+  padding-top: 18px;
+  position: relative;
+}
+.poster-treatment .event-venue::before {
+  content: '';
+  display: block;
+  width: 50px;
+  height: 2px;
+  background: var(--poster-secondary, #fff);
+  opacity: 0.6;
+  margin: 0 0 14px auto;
+}
+.poster-treatment .right-details .event-venue::before { margin: 0 0 14px 0; }
+
+.poster-treatment .event-date {
+  font-family: var(--font-serif);
+  font-style: italic;
+  font-weight: var(--weight-med);
+  font-size: var(--size-md);
+  color: var(--poster-text, #fff);
+  opacity: 0.9;
+  font-variant-numeric: tabular-nums;
+  margin: 0 0 8px;
+  padding: 0;
+}
+
+.poster-treatment .countdown-timer {
+  color: var(--accent-warn);
+  font-size: var(--size-sm);
+  font-weight: var(--weight-bold);
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.poster-treatment .event-description {
+  font-family: var(--font-serif);
+  font-style: italic;
+  font-weight: var(--weight-med);
+  font-size: var(--size-base);
+  color: var(--poster-text, #fff);
+  opacity: 0.75;
+  margin-top: 14px;
+  padding: 0;
+}
+
+/* Wave decorations on poster-treatment pages are taller than the base
+   30px in shared.css — the larger format gives the wave room to breathe
+   as a real design feature rather than a thin divider. Mobile is slightly
+   shorter to spare vertical space on phones. */
+.poster-treatment .map-container .wave-decoration {
+  height: 70px;
+}
+@media screen and (max-width: 768px) {
+  .poster-treatment .map-container .wave-decoration {
+    height: 50px;
+  }
+}
+
+/* Bottom-wave: sits at the bottom of the map-container, transitioning the
+   (red-dominant inverted) map → cream footer. Default SVG (no flip):
+   visual TOP = small surface-6 strip (meets map above),
+   visual BOTTOM = surface-2 bulk + transparent strip showing element bg
+                   (meets footer below).
+   Going secondary (red, top) → primary (cream, bottom). */
+.poster-treatment .map-container .wave-decoration.bottom-wave {
+  --surface-6: var(--poster-secondary);
+  --surface-5: color-mix(in oklab, var(--poster-secondary) 78%, var(--poster-primary));
+  --surface-4: color-mix(in oklab, var(--poster-secondary) 55%, var(--poster-primary));
+  --surface-3: color-mix(in oklab, var(--poster-secondary) 30%, var(--poster-primary));
+  --surface-2: var(--poster-primary);
+  background: var(--poster-primary);
+}
+
+/* Top-wave: sits at the top of the map-container, transitioning the cream
+   hero panel above → red-dominant map below.
+   Flipped (scaleY -1) so the default light-top/dark-bottom direction
+   reverses. After flip: surface-6 = visual top (meets panel above),
+   surface-2 = near visual bottom, element bg fills the transparent strip
+   at the visual bottom (meets the map below).
+   Going primary (cream, top) → secondary (red, bottom). */
+.poster-treatment .event-details-container + .map-container .wave-decoration.top-wave,
+.poster-treatment .event-hero + .map-container .wave-decoration.top-wave,
+.poster-treatment .map-container .wave-decoration.top-wave {
+  transform: scaleY(-1);
+  --surface-6: var(--poster-primary);
+  --surface-5: color-mix(in oklab, var(--poster-primary) 78%, var(--poster-secondary));
+  --surface-4: color-mix(in oklab, var(--poster-primary) 55%, var(--poster-secondary));
+  --surface-3: color-mix(in oklab, var(--poster-primary) 30%, var(--poster-secondary));
+  --surface-2: var(--poster-secondary);
+  background: var(--poster-secondary);
+}
+
+/* MOBILE */
+@media screen and (max-width: 768px) {
+  .poster-treatment .event-details-container {
+    padding: 24px 20px 48px;
+  }
+  .poster-treatment .event-venue::before {
+    margin: 0 0 12px auto;
+  }
+  /* Bump the hero title's minimum size — the desktop clamp's `5vw` floor
+     resolves to 2rem at phone widths, which feels too modest for a hero. */
+  .poster-treatment .event-copy .event-title {
+    font-size: clamp(2.4rem, 7vw, 3.25rem);
+  }
+  /* Map slot — desktop clamp is 360–620px (55vh); too tall on phones,
+     where it would eat over half the viewport. */
+  #venue-map {
+    height: clamp(260px, 40vh, 360px);
+  }
+  /* Hide the +/− zoom controls on mobile — pinch-to-zoom on touch
+     devices does the job, and the map already has gestureHandling. */
+  .venue-map-zoom-controls {
+    display: none;
+  }
+  /* Centre the Facebook/tickets/location-pin row on mobile so it lines
+     up with the centred poster above. Desktop keeps its flex-start.
+     `body` prefix needed because the base rule at ~line 826 has the same
+     selector specificity and appears later in the source — without the
+     bump it would lose the cascade tiebreak. */
+  body.poster-treatment .event-copy .facebook-event {
+    justify-content: center;
+  }
+}
+
+/* =============================================================
+   EVENT HERO (combined poster + copy)
+   New layout for poster-treatment event pages. Mobile-first:
+     ≤ 768px: column stack (poster top, copy below)
+     ≥ 769px: 2-column grid (poster left, copy right)
+   ============================================================= */
+
+.poster-treatment .event-hero {
+  background: var(--poster-primary, var(--surface-1));
+  padding: 32px 20px 64px;
+}
+
+.poster-treatment .event-hero-grid {
+  display: grid;
+  gap: 32px;
+  grid-template-columns: 1fr;     /* mobile: stacked */
+  max-width: 1100px;
+  margin: 0 auto;
+  align-items: start;
+}
+
+.poster-treatment .event-hero .event-image {
+  display: flex;
+  justify-content: center;
+  /* Override the base-mobile rule (.event-image { width: 60% }) so the
+     flex container fills its grid cell. The flex justify-content then
+     centres the inner <img> within it. */
+  width: 100%;
+  padding: 0;
+  z-index: 2;
+}
+
+.poster-treatment .event-hero .event-image img {
+  width: 100%;
+  max-width: 280px;
+  height: auto;
+  max-height: none;
+  box-shadow: var(--shadow-hero);
+  transition: transform var(--dur-base) var(--ease-out),
+              box-shadow var(--dur-base) var(--ease-out);
+}
+.poster-treatment .event-hero .event-image img:hover {
+  transform: var(--hover-lift);
+  box-shadow: var(--shadow-hero-hover);
+}
+
+.poster-treatment .event-copy {
+  color: var(--poster-text, #fff);
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  text-align: left;
+  padding: 0;
+}
+
+/* Eyebrow */
+.poster-treatment .event-copy .ele-presents-label {
+  font-family: var(--font-ui);
+  font-size: var(--size-sm);
+  font-weight: var(--weight-reg);
+  letter-spacing: var(--track-poster);
+  text-transform: uppercase;
+  color: var(--poster-text, #fff);
+  opacity: 0.8;
+  margin: 0 0 14px;
+  padding: 0;
+}
+
+/* Big serif/display title (uses per-event font). No negative top-margin —
+   the eyebrow's margin-bottom owns the gap, so it's easy to tune in one
+   place. */
+.poster-treatment .event-copy .event-title {
+  font-family: var(--poster-font-display, var(--font-serif));
+  font-weight: var(--weight-bold);
+  font-size: clamp(2rem, 5vw, 3.25rem);
+  line-height: var(--leading-tight);
+  letter-spacing: var(--track-tight);
+  text-transform: uppercase;
+  color: var(--poster-secondary, #fff);
+  margin: 0 0 16px;
+}
+
+/* Italic-serif subtitle (repurposed from .event-description) */
+.poster-treatment .event-copy .event-description {
+  font-family: var(--font-serif);
+  font-style: italic;
+  font-weight: var(--weight-med);
+  font-size: clamp(1.1rem, 2.5vw, var(--size-md));
+  line-height: var(--leading-snug);
+  color: var(--poster-text, #fff);
+  opacity: 0.95;
+  margin: 0 0 24px;
+  padding: 0;
+  text-align: left;
+  max-width: none;
+}
+
+/* Meta line (venue + date + countdown) preceded by hairline rule */
+.poster-treatment .event-copy .event-meta {
+  position: relative;
+  padding-top: 22px;
+  margin-bottom: 22px;
+}
+.poster-treatment .event-copy .event-meta::before {
+  content: '';
+  display: block;
+  width: 50px;
+  height: 2px;
+  background: var(--poster-secondary, #fff);
+  opacity: 0.8;
+  margin: 0 0 16px;
+}
+.poster-treatment .event-copy .event-venue {
+  font-family: var(--font-ui);
+  font-size: var(--size-sm);
+  font-weight: var(--weight-bold);
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--poster-text, #fff);
+  margin: 0 0 4px;
+  padding: 0;
+}
+.poster-treatment .event-copy .event-venue::before {
+  /* The rule lives on .event-meta now — kill the previous pseudo. */
+  content: none;
+  display: none;
+}
+.poster-treatment .event-copy .event-date {
+  font-family: var(--font-serif);
+  font-style: italic;
+  font-weight: var(--weight-med);
+  font-size: var(--size-base);
+  color: var(--poster-text, #fff);
+  opacity: 0.9;
+  margin: 0 0 8px;
+  padding: 0;
+  font-variant-numeric: tabular-nums;
+}
+.poster-treatment .event-copy .countdown-timer {
+  color: var(--accent-warn);
+  padding: 0;
+  margin: 0;
+  text-align: left;
+  font-size: var(--size-xs);
+  font-weight: var(--weight-bold);
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+/* Facebook + tickets row */
+.poster-treatment .event-copy .facebook-event {
+  display: flex;
+  flex-direction: row;
+  justify-content: flex-start;
+  gap: 7px;
+  margin: 6px 0 26px;
+  padding: 0;
+  max-width: none;
+}
+.poster-treatment .event-copy .facebook-event img {
+  height: 56px;
+  width: auto;
+}
+
+/* Inline SVG icon variant — solid stamp-style buttons in the poster palette.
+   Default: secondary fill, primary icon. Hover: invert. */
+.poster-treatment .event-copy .facebook-event a:has(.event-icon) {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: var(--poster-secondary);
+  color: var(--poster-primary);
+  border: 2px solid var(--poster-secondary);
+  transition: transform var(--dur-base) var(--ease-out),
+              background-color var(--dur-base) var(--ease-out),
+              color var(--dur-base) var(--ease-out);
+}
+.poster-treatment .event-copy .facebook-event a:has(.event-icon):hover,
+.poster-treatment .event-copy .facebook-event a:has(.event-icon):focus-visible {
+  background: var(--poster-primary);
+  color: var(--poster-secondary);
+  transform: scale(1.06);
+}
+.poster-treatment .event-copy .facebook-event .event-icon {
+  width: 24px;
+  height: 24px;
+  display: block;
+}
+
+/* Special guests block — sits between description and meta now */
+.poster-treatment .event-copy .event-guests {
+  margin: 4px 0 12px;
+}
+.poster-treatment .event-copy .special-guests-label {
+  font-family: var(--font-serif);
+  font-style: italic;
+  font-weight: var(--weight-med);
+  font-size: var(--size-md);
+  color: var(--poster-text, #fff);
+  opacity: 0.85;
+  margin: 0 0 8px;
+  padding: 0;
+}
+.poster-treatment .event-copy .guest-name {
+  font-family: var(--poster-font-display, var(--font-serif));
+  font-weight: var(--weight-bold);
+  font-size: clamp(1.4rem, 3.5vw, 1.9rem);
+  line-height: var(--leading-tight);
+  letter-spacing: var(--track-tight);
+  color: var(--poster-secondary, #fff);
+  margin: 0 0 4px;
+  text-transform: uppercase;
+}
+/* Inline bullet separator between guest names — pushed out from the
+   adjacent words so it reads as a clear divider, not a tight glyph. */
+.poster-treatment .event-copy .guest-name .dot {
+  display: inline-block;
+  margin: 0 0.5em;
+  opacity: 0.7;
+  font-weight: var(--weight-reg);
+}
+
+/* Desktop layout — poster left, copy right.
+   Poster column is sized larger than the copy block's natural height so
+   the poster visually "frames" the copy. Both items are vertically
+   centred against the grid row, which makes the copy block sit
+   centred against the poster's height — eyebrow inset from the poster
+   top by ~(poster_height − copy_height) / 2, same inset at the bottom.
+   Works for any copy length so long as the poster column is the tallest
+   item in the row. */
+@media screen and (min-width: 769px) {
+  .poster-treatment .event-hero {
+    padding: 48px 32px 80px;
+  }
+  .poster-treatment .event-hero-grid {
+    grid-template-columns: minmax(200px, 350px) 1fr;
+    gap: 56px;
+    align-items: center;
+  }
+  .poster-treatment .event-hero .event-image img {
+    max-width: 100%;
+  }
+  .poster-treatment .event-copy {
+    align-self: center;
+  }
+}
+
+/* =============================================================
+   MAP — supports two layouts:
+   1) Mapbox static <img class="map-image"> wrapped in <a class="map-link">
+      (used on most event pages).
+   2) Google Maps JS embed: <div id="venue-map" class="map-image"> styled to
+      the poster palette via the Maps JS API, with a "Get directions →" link
+      below the map opening the venue in Google Maps.
+   ============================================================= */
+.map-container { padding: 0; max-height: none; }
+
+.map-link {
+  display: block;
+  line-height: 0;
+  text-decoration: none;
+}
+.map-image {
+  display: block;
+  width: 100%;
+  height: clamp(180px, 28vh, 320px);
+  object-fit: cover;
+  border: 0;
+}
+.map-link:hover .map-image {
+  filter: brightness(1.08);
+  transition: filter var(--dur-fast) var(--ease-out);
+}
+
+/* Google Maps JS embed slot: <div id="venue-map"> needs an explicit height
+   for the API to render into. Placeholder background = the map's dominant
+   colour so there's no flash before the tiles load. Pinned to --map-base
+   (not --poster-secondary, which swaps in dark mode) so the placeholder
+   always matches the actual map's red landscape. */
+#venue-map {
+  display: block;
+  width: 100%;
+  height: clamp(360px, 55vh, 620px);
+  background: var(--map-base, #6a101a);
+}
+
+/* Custom zoom controls injected via map.controls[RIGHT_CENTER]. Replaces
+   Google's default white +/- pill so the buttons match the poster palette. */
+.venue-map-zoom-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-right: 12px;
+}
+.venue-map-zoom-btn {
+  width: 36px;
+  height: 36px;
+  border: 2px solid var(--poster-primary, #fbf2cc);
+  background: var(--poster-secondary, #6a101a);
+  color: var(--poster-primary, #fbf2cc);
+  border-radius: 50%;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  transition: transform var(--dur-fast) var(--ease-out),
+              background-color var(--dur-fast) var(--ease-out),
+              color var(--dur-fast) var(--ease-out);
+}
+.venue-map-zoom-btn svg {
+  width: 18px;
+  height: 18px;
+  display: block;
+}
+.venue-map-zoom-btn:hover,
+.venue-map-zoom-btn:focus-visible {
+  background: var(--poster-primary, #fbf2cc);
+  color: var(--poster-secondary, #6a101a);
+  transform: scale(1.06);
+  outline: none;
+}
+
+/* "Get directions" link — sibling between the map-container (whose bottom
+   wave fades into cream) and the cream footer. Reads as the first CTA
+   inside the cream poster zone. */
+.poster-treatment .map-directions-link {
+  display: block;
+  padding: 16px 20px 20px;
+  font-family: var(--font-ui);
+  font-size: var(--size-sm);
+  font-weight: var(--weight-bold);
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--poster-secondary, #6a101a);
+  background: var(--poster-primary, #fbf2cc);
+  text-decoration: none;
+  text-align: center;
+  transition: color var(--dur-fast) var(--ease-out);
+}
+.poster-treatment .map-directions-link:hover,
+.poster-treatment .map-directions-link:focus-visible {
+  color: color-mix(in oklab, var(--poster-secondary) 70%, #000);
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+
+/* =============================================================
+   FOOTER — poster-treatment override
+   Pulls the dark default footer back into the poster palette: cream panel,
+   red text/headings/inputs. Matches the rest of the page so the bottom-wave
+   can land smoothly on the cream surface.
+   ============================================================= */
+.poster-treatment footer {
+  background: var(--poster-primary, #fbf2cc);
+  color: var(--poster-secondary, #6a101a);
+}
+.poster-treatment .footer-content h2 {
+  color: var(--poster-secondary, #6a101a);
+  font-family: var(--poster-font-display, var(--font-serif));
+  font-weight: var(--weight-bold);
+  letter-spacing: 0.04em;
+}
+.poster-treatment .footer-content p {
+  color: var(--poster-secondary, #6a101a);
+}
+.poster-treatment #mce-EMAIL {
+  background: transparent;
+  color: var(--poster-secondary);
+  border: 1px solid var(--poster-secondary);
+}
+.poster-treatment #mce-EMAIL::placeholder {
+  color: color-mix(in oklab, var(--poster-secondary) 55%, var(--poster-primary));
+}
+.poster-treatment #mc-embedded-subscribe {
+  background-color: var(--poster-secondary);
+  color: var(--poster-primary);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+/* Inline arrow SVG inherits the button's text colour, so it flips
+   automatically with the dark-mode token swap (cream-on-red in light
+   mode, red-on-cream in dark mode). */
+.poster-treatment #mc-embedded-subscribe .subscribe-icon {
+  width: 18px;
+  height: 18px;
+  display: block;
+}
+.poster-treatment footer .social-media-icons a {
+  color: var(--poster-secondary);
 }

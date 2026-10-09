@@ -1,5 +1,6 @@
 document.addEventListener("DOMContentLoaded", function () {
   const list = document.querySelector('.long-track-list');
+  if (!list) return;
   const listItems = Array.from(list.children); // Convert NodeList to an Array
   
   // Split the list items into two arrays (left and right columns)

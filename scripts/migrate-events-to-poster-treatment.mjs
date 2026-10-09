@@ -1,0 +1,931 @@
+#!/usr/bin/env node
+/**
+ * Migrate event pages to the Barratts/Thomas Truax "poster-treatment" layout:
+ *   - Single hero (.event-hero > .event-hero-grid > [.event-image, .event-copy])
+ *     instead of the old split (.event-container + standalone wave + .event-details-container).
+ *   - Inline SVG icons for Facebook + tickets + location pin (currentColor-themed).
+ *   - Inline SVG keyboard_return arrow for the subscribe button.
+ *   - Inline <style id="poster-palette"> with --map-base / --map-accent tokens
+ *     and a conditional dark-mode @media block (only when the page's edge
+ *     primary is light — dark primaries don't need a swap).
+ *   - Map area: top/bottom wave decorations + #venue-map div, replacing the
+ *     Mapbox <img>. Google Maps JS init styles the map to the palette and
+ *     places an ELE-logo marker on a coloured teardrop.
+ *
+ * Palette source: poster edge sampling (the inset rim of each poster image),
+ * which captures the dominant background colour rather than vibrant interior
+ * accents. See sampleEdgePalette() below.
+ *
+ * Skips: Barratts (already hand-migrated), Thomas Truax (pilot), event-template.
+ *
+ * Run: node scripts/migrate-events-to-poster-treatment.mjs
+ *      node scripts/migrate-events-to-poster-treatment.mjs <filename>   # one file
+ */
+
+import sharp from "sharp";
+import { readdir, readFile, writeFile } from "node:fs/promises";
+import { resolve, dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+
+const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+const EVENTS_DIR = join(ROOT, "events");
+const POSTERS_DIR = join(ROOT, "index/pictures/posters");
+
+const SKIP = new Set([
+  "4October24-TheBarratts.html",
+  "12April25-ThomasTruax.html",
+  "event-template.html",
+]);
+
+// =============================================================
+// Per-venue URL + coords map. Coords come from each Google Maps
+// /place/ URL (the !8m2!3d<lat>!4d<lng> bit); the URL itself is
+// what we open when someone taps the pin or location-pin button.
+// =============================================================
+const VENUES = {
+  "The Black Prince": {
+    url: "https://www.google.com/maps/search/?api=1&query=The+Black+Prince+15+Abington+Square+Northampton+NN1+4AE",
+    lat: 52.2402047, lng: -0.8884071,
+  },
+  "The Lab": {
+    url: "https://maps.app.goo.gl/wejJPVXBdi9W4e8Q9",
+    lat: 52.2429854, lng: -0.8912883,
+  },
+  "St Andrews Church": {
+    // St Andrew's Church, Rugby (Warwickshire) — NOT Kettering.
+    // The page text says "St Andrews Church" but the poster + existing
+    // Mapbox coords (52.37, -1.26) make clear it's the Rugby church.
+    url: "https://www.google.com/maps/place/St+Andrew's+Church,+Rugby/@52.3726101,-1.263937,693m/data=!3m2!1e3!4b1!4m6!3m5!1s0x487740b9d0446337:0xdd8e8db7ae97d365!8m2!3d52.3726101!4d-1.2613621!16s%2Fg%2F11c6lq9ts2",
+    lat: 52.3726101, lng: -1.2613621,
+  },
+  "The Pomfret Arms": {
+    url: "https://www.google.com/maps/place/The+Pomfret+Arms/@52.230008,-0.8990649,17z/data=!3m1!4b1!4m6!3m5!1s0x48770f20774a3d9b:0x9f173961b2c8b77a!8m2!3d52.230008!4d-0.89649!16s%2Fg%2F11ckvlnwmj",
+    lat: 52.230008, lng: -0.89649,
+  },
+  "Bedford Esquires": {
+    url: "https://www.google.com/maps/place/Bedford+Esquires+-+Music+Venue/@52.1391378,-0.4766691,17z/data=!3m1!4b1!4m6!3m5!1s0x4877b6d1b01f75eb:0xf3ea1ad8b3aa07f0!8m2!3d52.1391378!4d-0.4740942!16s%2Fg%2F1ym82mflh",
+    lat: 52.1391378, lng: -0.4740942,
+  },
+};
+
+// =============================================================
+// Manual palette overrides — take precedence over edge sampling
+// when the auto-extraction picks up the wrong dominant colour
+// (often because the poster's edge is a thin border that masks
+// the actual visual identity inside). Keys are exact filenames.
+// =============================================================
+const MANUAL_PALETTES = {
+  "26April24-BenJennings&TheNewMoons.html": {
+    primary:   "#f1ad1e",   // yellow info-box panel
+    secondary: "#1f7ca1",   // sky blue
+  },
+  "31March23-BenJenningsEnsemble.html": {
+    primary:   "#9a9775",   // edge-sampled olive (keep)
+    secondary: "#6a6747",   // edge-sampled dark olive (keep)
+    text:      "#000000",   // override: text reads as black, not dark olive
+  },
+  "7thApril23-FollyGroup.html": {
+    primary:   "#1f5fa8",   // deep blue from the photo (the poster IS blue)
+    secondary: "#ffffff",   // pure white text
+  },
+  "9March24-ThomasTruax.html": {
+    primary:   "#283b4d",   // mid-blue from the centre area around Tom
+    secondary: "#c43234",   // poster red (right border + bottom band)
+  },
+};
+
+// =============================================================
+// Serif-display fonts pair with the italic Cormorant supporting
+// text (the original Barratts treatment). Non-serif display fonts
+// (chunky sans, etc.) get UI-sans supporting text instead so the
+// supporting line doesn't clash as a stylistic mismatch.
+// =============================================================
+const SERIF_DISPLAY_FONTS = new Set([
+  "Abril Fatface",
+  "Cormorant Garamond",
+  "Playfair Display",
+  "EB Garamond",
+  "Lora",
+  "Crimson Pro",
+  "Vollkorn",
+]);
+
+// =============================================================
+// Edge palette sampling
+// Sample the inset rim of the poster image and return the top two
+// dominant colours by frequency. We avoid the very outer band
+// (print-bleed, anti-alias) by insetting ~4% in, and sample a
+// 5%-wide strip on each edge.
+// =============================================================
+async function sampleEdgePalette(posterPath) {
+  const img = sharp(posterPath);
+  const meta = await img.metadata();
+  const isLandscape = meta.width > meta.height;
+  const { data, info } = await img.raw().toBuffer({ resolveWithObject: true });
+  const W = info.width, H = info.height, C = info.channels;
+
+  const inset = Math.floor(Math.min(W, H) * 0.04);
+  const band = Math.floor(Math.min(W, H) * 0.05);
+  const counts = new Map();
+
+  const push = (r, g, b) => {
+    const k = (r >> 4) * 256 + (g >> 4) * 16 + (b >> 4);
+    if (!counts.has(k)) counts.set(k, { r: 0, g: 0, b: 0, n: 0 });
+    const e = counts.get(k);
+    e.r += r; e.g += g; e.b += b; e.n++;
+  };
+
+  // top + bottom bands
+  for (let y = inset; y < inset + band; y++) {
+    for (let x = 0; x < W; x += 4) {
+      const i = (y * W + x) * C;
+      push(data[i], data[i + 1], data[i + 2]);
+    }
+  }
+  for (let y = H - inset - band; y < H - inset; y++) {
+    for (let x = 0; x < W; x += 4) {
+      const i = (y * W + x) * C;
+      push(data[i], data[i + 1], data[i + 2]);
+    }
+  }
+  // left + right bands
+  for (let x = inset; x < inset + band; x++) {
+    for (let y = 0; y < H; y += 4) {
+      const i = (y * W + x) * C;
+      push(data[i], data[i + 1], data[i + 2]);
+    }
+  }
+  for (let x = W - inset - band; x < W - inset; x++) {
+    for (let y = 0; y < H; y += 4) {
+      const i = (y * W + x) * C;
+      push(data[i], data[i + 1], data[i + 2]);
+    }
+  }
+
+  const ranked = Array.from(counts.values())
+    .map(e => ({
+      r: Math.round(e.r / e.n),
+      g: Math.round(e.g / e.n),
+      b: Math.round(e.b / e.n),
+      n: e.n,
+    }))
+    .sort((a, b) => b.n - a.n);
+
+  const toHex = ({ r, g, b }) =>
+    "#" + [r, g, b].map(v => v.toString(16).padStart(2, "0")).join("");
+
+  // primary = dominant, secondary = the next bucket that's perceptually
+  // far enough from primary (so we don't pick near-identical greys/etc.).
+  const primary = ranked[0];
+  const secondary = ranked.slice(1).find(c =>
+    Math.hypot(c.r - primary.r, c.g - primary.g, c.b - primary.b) > 60
+  ) || ranked[1];
+
+  return {
+    primary: toHex(primary),
+    secondary: toHex(secondary),
+    primaryIsDark: luminance(primary) < 0.5,
+    secondaryIsDark: luminance(secondary) < 0.5,
+    isLandscape,
+  };
+}
+
+function luminance({ r, g, b }) {
+  // Rec. 709 relative luminance
+  const norm = v => {
+    v /= 255;
+    return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
+  };
+  return 0.2126 * norm(r) + 0.7152 * norm(g) + 0.0722 * norm(b);
+}
+
+function hexIsDark(hex) {
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+  return luminance({ r, g, b }) < 0.5;
+}
+
+// =============================================================
+// Parse the existing event page for per-event data.
+// All regexes are deliberately permissive (single-line matches)
+// because the source HTML is hand-authored with varying whitespace.
+// =============================================================
+// Decode the common HTML entities that show up in hand-authored source
+// HTML. Must be applied to ALL extracted strings so escapeHtml() at
+// render time doesn't double-encode them (e.g. & → &amp; → &amp;amp;).
+// Loops until stable so multi-encoded inputs (&amp;amp;amp;) — left over
+// from previous migration runs that re-encoded an already-encoded value
+// — fully unwind in one call.
+function decodeHtml(s) {
+  if (s == null) return s;
+  let prev = String(s);
+  while (true) {
+    const next = prev
+      .replace(/&lt;/g, "<")
+      .replace(/&gt;/g, ">")
+      .replace(/&quot;/g, '"')
+      .replace(/&#39;/g, "'")
+      .replace(/&apos;/g, "'")
+      .replace(/&amp;/g, "&");
+    if (next === prev) return next;
+    prev = next;
+  }
+}
+
+function extractEventData(html, filename) {
+  const pick = (re, group = 1) => {
+    const m = html.match(re);
+    return m ? decodeHtml(m[group].trim()) : null;
+  };
+
+  const titleTag = pick(/<title>([\s\S]*?)<\/title>/);
+  const metaDesc = pick(/<meta name="description" content="([^"]*)"/);
+  const ogDesc = pick(/<meta property="og:description" content="([^"]*)"/);
+  const schemaDesc = pick(/"description":\s*"([^"]*)"/);
+  const posterFont = pick(/id="poster-font"[^>]*href="https:\/\/fonts\.googleapis\.com\/css2\?family=([^&"]+)/);
+  const posterFontName = posterFont ? decodeURIComponent(posterFont.split(":")[0].replace(/\+/g, " ")) : null;
+  const fontCss = pick(/--poster-font-display:\s*([^;]+);/);
+
+  const posterFile = pick(/posters\/([^"]+\.webp)/);
+  const eyebrow = pick(/<p class="ele-presents-label">([^<]*)<\/p>/) || "Eight Limb Entertainment presents…";
+  const eventTitle = pick(/<h1 class="event-title">([^<]*)<\/h1>/);
+  const description = pick(/<p class="event-description">([\s\S]*?)<\/p>/);
+
+  const specialGuestsLabel =
+    pick(/<p class="special-guests-label">([^<]*)<\/p>/) || null;
+  const guestNames = [];
+  const guestRe = /<p class="guest-name">([\s\S]*?)<\/p>/g;
+  let gm;
+  while ((gm = guestRe.exec(html)) !== null) {
+    // Strip any inline <span class="dot">•</span> separators that may
+    // already be present from a previous migration run, then decode entities.
+    const stripped = gm[1].replace(/<span\s+class="dot"[^>]*>[^<]*<\/span>/g, " ");
+    guestNames.push(decodeHtml(stripped.trim()));
+  }
+
+  const venueName = pick(/<p class="event-venue">([^<]*)<\/p>/);
+  const eventDate = pick(/<p class="event-date">([^<]*)<\/p>/);
+  const targetDate = pick(/data-target-date="([^"]+)"/);
+
+  // Facebook + tickets links — order in old layout is FB first, then tickets.
+  const facebookUrl = pick(/<a href="(https:\/\/www\.facebook\.com\/events\/[^"]+)"/);
+  const ticketsUrl = pick(/<a href="(https:\/\/wegottickets\.com\/[^"]+)"/);
+
+  // Map coords from existing Mapbox URL (pin-l+HEX(lng,lat))
+  const mapboxMatch = html.match(/pin-l\+[0-9a-f]+\(([^)]+)\)/i);
+  let existingLng = null, existingLat = null;
+  if (mapboxMatch) {
+    const [lng, lat] = mapboxMatch[1].split(",").map(Number);
+    existingLng = lng;
+    existingLat = lat;
+  }
+
+  return {
+    filename,
+    titleTag,
+    metaDesc,
+    ogDesc,
+    schemaDesc,
+    posterFile,
+    posterFontName,
+    fontCss: fontCss || `'${posterFontName || "Cormorant Garamond"}', 'Cormorant Garamond', Georgia, serif`,
+    eyebrow,
+    eventTitle,
+    description,
+    specialGuestsLabel,
+    guestNames,
+    venueName,
+    eventDate,
+    targetDate,
+    facebookUrl,
+    ticketsUrl,
+    existingLng,
+    existingLat,
+  };
+}
+
+// =============================================================
+// HTML rendering. Long template literal — kept inline rather than
+// in a separate file so the script is one self-contained file.
+// =============================================================
+const WAVE_TOP_PATHS = `      <path d="M0 8.16L11.3333 9.384C22.6667 10.676 45.3333 13.124 67.7333 14.824C90.2667 16.524 112.4 17.476 134.933 17.884C157.333 18.36 180 18.36 202.4 16.864C224.933 15.436 247.067 12.444 269.6 14.484C292 16.524 314.667 23.596 337.067 27.2C359.6 30.804 381.733 31.076 404.267 28.56C426.667 26.044 449.333 20.876 471.733 19.244C494.267 17.68 516.4 19.72 538.933 21.964C561.333 24.276 584 26.724 606.4 25.024C628.933 23.324 651.067 17.476 673.6 13.736C696 9.996 718.667 8.364 741.067 7.82C763.6 7.276 785.733 7.684 808.267 10.676C830.667 13.6 853.333 19.04 875.733 21.284C898.267 23.596 920.4 22.644 942.933 21.964C965.333 21.284 988 20.876 1010.4 20.536C1032.93 20.196 1055.07 19.924 1077.6 20.06C1100 20.196 1122.67 20.604 1145.07 20.196C1167.6 19.72 1189.73 18.36 1212.27 17C1234.67 15.64 1257.33 14.28 1268.67 13.6L1280 12.92V51.68H0V8.16Z" fill="var(--surface-2)"/>
+      <path d="M0 24.48L11.3333 25.84C22.6667 27.2 45.3333 29.92 67.7333 29.58C90.2667 29.24 112.4 25.84 134.933 25.5C157.333 25.16 180 27.88 202.4 27.2C224.933 26.52 247.067 22.44 269.6 20.264C292 18.156 314.667 17.884 337.067 18.496C359.6 19.04 381.733 20.4 404.267 23.46C426.667 26.52 449.333 31.28 471.733 31.756C494.267 32.164 516.4 28.356 538.933 28.016C561.333 27.676 584 30.804 606.4 30.6C628.933 30.396 651.067 26.724 673.6 23.936C696 21.08 718.667 19.04 741.067 19.72C763.6 20.4 785.733 23.8 808.267 23.256C830.667 22.644 853.333 18.156 875.733 19.516C898.267 20.876 920.4 28.084 942.933 29.036C965.333 29.92 988 24.48 1010.4 23.8C1032.93 23.12 1055.07 27.2 1077.6 27.2C1100 27.2 1122.67 23.12 1145.07 23.664C1167.6 24.276 1189.73 29.444 1212.27 29.444C1234.67 29.444 1257.33 24.276 1268.67 21.624L1280 19.04V51.68H0V24.48Z" fill="var(--surface-3)"/>
+      <path d="M0 32.64H11.3333C22.6667 32.64 45.3333 32.64 67.7333 32.98C90.2667 33.32 112.4 34 134.933 33.864C157.333 33.796 180 32.844 202.4 32.844C224.933 32.844 247.067 33.796 269.6 32.98C292 32.164 314.667 29.716 337.067 30.124C359.6 30.6 381.733 34 404.267 34.816C426.667 35.564 449.333 33.796 471.733 31.824C494.267 29.92 516.4 27.88 538.933 28.764C561.333 29.716 584 33.524 606.4 34.68C628.933 35.836 651.067 34.204 673.6 33.864C696 33.524 718.667 34.476 741.067 34.68C763.6 34.884 785.733 34.476 808.267 32.98C830.667 31.484 853.333 29.036 875.733 29.036C898.267 29.036 920.4 31.484 942.933 31.96C965.333 32.436 988 30.804 1010.4 29.104C1032.93 27.404 1055.07 25.636 1077.6 24.48C1100 23.324 1122.67 22.916 1145.07 22.916C1167.6 22.916 1189.73 23.324 1212.27 25.976C1234.67 28.56 1257.33 33.32 1268.67 35.7L1280 38.08V51.68H0V32.64Z" fill="var(--surface-4)"/>
+      <path d="M0 25.84L11.3333 28.016C22.6667 30.124 45.3333 34.476 67.7333 35.7C90.2667 36.924 112.4 35.156 134.933 33.184C157.333 31.28 180 29.24 202.4 28.356C224.933 27.404 247.067 27.676 269.6 27.54C292 27.404 314.667 26.996 337.067 29.036C359.6 31.076 381.733 35.564 404.267 35.836C426.667 36.04 449.333 31.96 471.733 32.164C494.267 32.436 516.4 36.924 538.933 36.924C561.333 36.924 584 32.436 606.4 30.396C628.933 28.356 651.067 28.764 673.6 30.26C696 31.756 718.667 34.204 741.067 34.68C763.6 35.156 785.733 33.524 808.267 32.3C830.667 31.076 853.333 30.124 875.733 30.804C898.267 31.484 920.4 33.796 942.933 34.68C965.333 35.564 988 35.156 1010.4 35.836C1032.93 36.516 1055.07 38.284 1077.6 38.216C1100 38.08 1122.67 36.04 1145.07 35.7C1167.6 35.36 1189.73 36.72 1212.27 35.7C1234.67 34.68 1257.33 31.28 1268.67 29.58L1280 27.88V51.68H0V25.84Z" fill="var(--surface-5)"/>
+      <path d="M0 36.04L11.3333 36.516C22.6667 36.924 45.3333 37.876 67.7333 38.896C90.2667 39.916 112.4 41.004 134.933 40.8C157.333 40.596 180 38.964 202.4 37.4C224.933 35.836 247.067 34.204 269.6 35.36C292 36.516 314.667 40.324 337.067 40.936C359.6 41.48 381.733 38.76 404.267 37.876C426.667 36.924 449.333 37.876 471.733 37.876C494.267 37.876 516.4 36.924 538.933 37.264C561.333 37.604 584 39.236 606.4 40.664C628.933 42.16 651.067 43.52 673.6 44.2C696 44.88 718.667 44.88 741.067 42.704C763.6 40.596 785.733 36.244 808.267 34.136C830.667 31.96 853.333 31.96 875.733 33.184C898.267 34.476 920.4 36.924 942.933 38.896C965.333 40.8 988 42.16 1010.4 42.16C1032.93 42.16 1055.07 40.8 1077.6 40.46C1100 40.12 1122.67 40.8 1145.07 40.936C1167.6 41.004 1189.73 40.596 1212.27 40.46C1234.67 40.324 1257.33 40.596 1268.67 40.664L1280 40.8V51.68H0V36.04Z" fill="var(--surface-6)"/>
+      <path d="M0 38.76L11.3333 40.256C22.6667 41.684 45.3333 44.676 67.7333 45.424C90.2667 46.24 112.4 44.88 134.933 44.744C157.333 44.676 180 45.764 202.4 45.56C224.933 45.356 247.067 43.724 269.6 43.384C292 43.044 314.667 43.996 337.067 43.52C359.6 43.044 381.733 41.276 404.267 41.684C426.667 42.16 449.333 44.88 471.733 45.016C494.267 45.084 516.4 42.636 538.933 42.364C561.333 42.16 584 44.2 606.4 44.88C628.933 45.56 651.067 44.88 673.6 45.084C696 45.356 718.667 46.444 741.067 46.716C763.6 46.92 785.733 46.24 808.267 44.88C830.667 43.52 853.333 41.48 875.733 41.82C898.267 42.16 920.4 44.88 942.933 45.356C965.333 45.764 988 43.996 1010.4 42.5C1032.93 41.004 1055.07 39.916 1077.6 39.576C1100 39.236 1122.67 39.644 1145.07 39.984C1167.6 40.324 1189.73 40.596 1212.27 40.324C1234.67 40.12 1257.33 39.44 1268.67 39.1L1280 38.76V51.68H0V38.76Z" fill="var(--surface-6)"/>`;
+
+const WAVE_BOTTOM_PATHS = `      <path d="M1280 50.4267L1268.67 48.9387C1257.33 47.368 1234.67 44.392 1212.27 42.3253C1189.73 40.2587 1167.6 39.1013 1145.07 38.6053C1122.67 38.0267 1100 38.0267 1077.6 39.8453C1055.07 41.5813 1032.93 45.2187 1010.4 42.7387C988 40.2587 965.333 31.6613 942.933 27.28C920.4 22.8987 898.267 22.568 875.733 25.6267C853.333 28.6853 830.667 34.968 808.267 36.952C785.733 38.8533 763.6 36.3733 741.067 33.6453C718.667 30.8347 696 27.8587 673.6 29.9253C651.067 31.992 628.933 39.1013 606.4 43.648C584 48.1947 561.333 50.1787 538.933 50.84C516.4 51.5013 494.267 51.0053 471.733 47.368C449.333 43.8133 426.667 37.2 404.267 34.472C381.733 31.6613 359.6 32.8187 337.067 33.6453C314.667 34.472 292 34.968 269.6 35.3813C247.067 35.7947 224.933 36.1253 202.4 35.96C180 35.7947 157.333 35.2987 134.933 35.7947C112.4 36.3733 90.2666 38.0267 67.7333 39.68C45.3333 41.3333 22.6666 42.9867 11.3333 43.8133L0 44.64V0H1280V50.4267Z" fill="var(--surface-2)"/>
+      <path d="M1280 30.5867L1268.67 28.9333C1257.33 27.28 1234.67 23.9733 1212.27 24.3867C1189.73 24.8 1167.6 28.9333 1145.07 29.3467C1122.67 29.76 1100 26.4533 1077.6 27.28C1055.07 28.1067 1032.93 33.0667 1010.4 35.712C988 38.2747 965.333 38.6053 942.933 37.8613C920.4 37.2 898.267 35.5467 875.733 31.8267C853.333 28.1067 830.667 22.32 808.267 21.7413C785.733 21.2453 763.6 25.8747 741.067 26.288C718.667 26.7013 696 22.8987 673.6 23.1467C651.067 23.3947 628.933 27.8587 606.4 31.248C584 34.72 561.333 37.2 538.933 36.3733C516.4 35.5467 494.267 31.4133 471.733 32.0747C449.333 32.8187 426.667 38.2747 404.267 36.6213C381.733 34.968 359.6 26.2053 337.067 25.048C314.667 23.9733 292 30.5867 269.6 31.4133C247.067 32.24 224.933 27.28 202.4 27.28C180 27.28 157.333 32.24 134.933 31.5787C112.4 30.8347 90.2666 24.552 67.7333 24.552C45.3333 24.552 22.6666 30.8347 11.3333 34.0587L0 37.2V0H1280V30.5867Z" fill="var(--surface-3)"/>
+      <path d="M1280 20.6667H1268.67C1257.33 20.6667 1234.67 20.6667 1212.27 20.2533C1189.73 19.84 1167.6 19.0133 1145.07 19.1787C1122.67 19.2613 1100 20.4187 1077.6 20.4187C1055.07 20.4187 1032.93 19.2613 1010.4 20.2533C988 21.2453 965.333 24.2213 942.933 23.7253C920.4 23.1467 898.267 19.0133 875.733 18.0213C853.333 17.112 830.667 19.2613 808.267 21.6587C785.733 23.9733 763.6 26.4533 741.067 25.3787C718.667 24.2213 696 19.592 673.6 18.1867C651.067 16.7813 628.933 18.7653 606.4 19.1787C584 19.592 561.333 18.4347 538.933 18.1867C516.4 17.9387 494.267 18.4347 471.733 20.2533C449.333 22.072 426.667 25.048 404.267 25.048C381.733 25.048 359.6 22.072 337.067 21.4933C314.667 20.9147 292 22.8987 269.6 24.9653C247.067 27.032 224.933 29.1813 202.4 30.5867C180 31.992 157.333 32.488 134.933 32.488C112.4 32.488 90.2666 31.992 67.7333 28.768C45.3333 25.6267 22.6666 19.84 11.3333 16.9467L0 14.0533V0H1280V20.6667Z" fill="var(--surface-4)"/>
+      <path d="M1280 28.9333L1268.67 26.288C1257.33 23.7253 1234.67 18.4347 1212.27 16.9467C1189.73 15.4587 1167.6 17.608 1145.07 20.0053C1122.67 22.32 1100 24.8 1077.6 25.8747C1055.07 27.032 1032.93 26.7013 1010.4 26.8667C988 27.032 965.333 27.528 942.933 25.048C920.4 22.568 898.267 17.112 875.733 16.7813C853.333 16.5333 830.667 21.4933 808.267 21.2453C785.733 20.9147 763.6 15.4587 741.067 15.4587C718.667 15.4587 696 20.9147 673.6 23.3947C651.067 25.8747 628.933 25.3787 606.4 23.56C584 21.7413 561.333 18.7653 538.933 18.1867C516.4 17.608 494.267 19.592 471.733 21.08C449.333 22.568 426.667 23.7253 404.267 22.8987C381.733 22.072 359.6 19.2613 337.067 18.1867C314.667 17.112 292 17.608 269.6 16.7813C247.067 15.9547 224.933 13.8053 202.4 13.888C180 14.0533 157.333 16.5333 134.933 16.9467C112.4 17.36 90.2666 15.7067 67.7333 16.9467C45.3333 18.1867 22.6666 22.32 11.3333 24.3867L0 26.4533V0H1280V28.9333Z" fill="var(--surface-5)"/>
+      <path d="M1280 16.5333L1268.67 15.9547C1257.33 15.4587 1234.67 14.3013 1212.27 13.0613C1189.73 11.8213 1167.6 10.4987 1145.07 10.7467C1122.67 10.9947 1100 12.9787 1077.6 14.88C1055.07 16.7813 1032.93 18.7653 1010.4 17.36C988 15.9547 965.333 11.3253 942.933 10.5813C920.4 9.92 898.267 13.2267 875.733 14.3013C853.333 15.4587 830.667 14.3013 808.267 14.3013C785.733 14.3013 763.6 15.4587 741.067 15.0453C718.667 14.632 696 12.648 673.6 10.912C651.067 9.09333 628.933 7.44 606.4 6.61333C584 5.78667 561.333 5.78667 538.933 8.432C516.4 10.9947 494.267 16.2853 471.733 18.848C449.333 21.4933 426.667 21.4933 404.267 20.0053C381.733 18.4347 359.6 15.4587 337.067 13.0613C314.667 10.7467 292 9.09333 269.6 9.09333C247.067 9.09333 224.933 10.7467 202.4 11.16C180 11.5733 157.333 10.7467 134.933 10.5813C112.4 10.4987 90.2666 10.9947 67.7333 11.16C45.3333 11.3253 22.6666 10.9947 11.3333 10.912L0 10.7467V0H1280V16.5333Z" fill="var(--surface-6)"/>
+      <path d="M1280 13.2267L1268.67 11.408C1257.33 9.672 1234.67 6.03467 1212.27 5.12533C1189.73 4.13333 1167.6 5.78667 1145.07 5.952C1122.67 6.03467 1100 4.712 1077.6 4.96C1055.07 5.208 1032.93 7.192 1010.4 7.60533C988 8.01867 965.333 6.86133 942.933 7.44C920.4 8.01867 898.267 10.168 875.733 9.672C853.333 9.09333 830.667 5.78667 808.267 5.62133C785.733 5.53867 763.6 8.51467 741.067 8.84533C718.667 9.09333 696 6.61333 673.6 5.78667C651.067 4.96 628.933 5.78667 606.4 5.53867C584 5.208 561.333 3.88533 538.933 3.55467C516.4 3.30667 494.267 4.13333 471.733 5.78667C449.333 7.44 426.667 9.92 404.267 9.50667C381.733 9.09333 359.6 5.78667 337.067 5.208C314.667 4.712 292 6.86133 269.6 8.68C247.067 10.4987 224.933 11.8213 202.4 12.2347C180 12.648 157.333 12.152 134.933 11.7387C112.4 11.3253 90.2666 10.9947 67.7333 11.3253C45.3333 11.5733 22.6666 12.4 11.3333 12.8133L0 13.2267V0H1280V13.2267Z" fill="var(--surface-6)"/>`;
+
+// Inline SVG icon path data
+const FB_PATH = "M22.675 0H1.325C.593 0 0 .593 0 1.325v21.351C0 23.408.593 24 1.325 24H12.82v-9.294H9.692v-3.622h3.128V8.413c0-3.1 1.893-4.788 4.659-4.788 1.325 0 2.463.099 2.795.143v3.24l-1.918.001c-1.504 0-1.795.715-1.795 1.763v2.313h3.587l-.467 3.622h-3.12V24h6.116C23.407 24 24 23.408 24 22.676V1.325C24 .593 23.407 0 22.675 0z";
+const TICKET_PATH = "M22 10V6c0-1.11-.9-2-2-2H4c-1.1 0-1.99.89-1.99 2v4c1.1 0 1.99.9 1.99 2s-.89 2-2 2v4c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2v-4c-1.1 0-2-.9-2-2s.9-2 2-2zm-7 8h-2v-2h2v2zm0-5h-2v-2h2v2zm0-5h-2V6h2v2z";
+const PIN_PATH = "M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z";
+const SUBSCRIBE_PATH = "M19 7v4H5.83l3.58-3.59L8 6l-6 6 6 6 1.41-1.41L5.83 13H21V7z";
+
+function renderTemplate(data) {
+  const {
+    edge,
+    venue,
+    posterFile,
+    posterFontName,
+    fontCss,
+    titleTag,
+    metaDesc,
+    ogDesc,
+    schemaDesc,
+    eyebrow,
+    eventTitle,
+    description,
+    specialGuestsLabel,
+    guestNames,
+    venueName,
+    eventDate,
+    targetDate,
+    facebookUrl,
+    ticketsUrl,
+  } = data;
+
+  // Map orientation: map should be "secondary-dominant" (like Barratts pattern)
+  // so the panel→map wave has a real primary→secondary gradient.
+  const mapBase = edge.secondary;   // dominant landscape
+  const mapAccent = edge.primary;   // roads/water highlights
+
+  // Logo variant for the pin: dark teardrop → use white logo (and 36×27);
+  // light teardrop → use dark logo (and 36×36).
+  const pinFill = mapAccent;        // fillColor on the marker icon path
+  const pinFillIsDark = hexIsDark(pinFill);
+  const pinLogoUrl = pinFillIsDark
+    ? "../index/pictures/icons/ELE_Logo_Dark.webp"
+    : "../index/pictures/icons/ELE_Logo.webp";
+  // Logo dimensions inside the teardrop bulb. Bulb is 56px diameter with
+  // a 2px stroke → 52px inner diameter. We push the logo close to that
+  // inner edge so it dominates the bulb. Logos are circular content
+  // (octopus inside circular text) so corners are transparent — width
+  // can match the inner diameter without overflowing visibly.
+  // Anchor: image-centre 42px above the teardrop's geo point (= bulb
+  // centre), so anchor.y = imageHeight/2 + 42.
+  // Dark logo is 473×354 (~4:3 — keeps aspect), square logo is 192×192.
+  const pinLogoSize = pinFillIsDark ? "52, 39" : "52, 52";
+  const pinLogoAnchor = pinFillIsDark ? "26, 61" : "26, 68";
+
+  // Header logo: panel = primary; if primary is dark, use white logo,
+  // else use dark logo.
+  const headerLogoOverride = edge.primaryIsDark
+    ? null   // poster-treatment default is already white logo (ELE_Logo_Dark)
+    : "../index/pictures/icons/ELE_Logo.webp";
+
+  // Supporting-text font choice. Serif display fonts pair with italic
+  // Cormorant; anything else gets UI sans.
+  const isSerifDisplay = SERIF_DISPLAY_FONTS.has(posterFontName);
+  const supportingFontOverride = isSerifDisplay ? "" : `
+      /* Display font is a non-serif — switch supporting text (special-guests
+         label + date) to the UI sans so it doesn't clash with italic serif. */
+      body.poster-treatment .event-copy .special-guests-label,
+      body.poster-treatment .event-copy .event-date {
+        font-family: var(--font-ui);
+        font-style: normal;
+        font-weight: var(--weight-med);
+        letter-spacing: 0.02em;
+      }`;
+
+  // Title margin compensation for chunky-display fonts (more empty line-box
+  // space above the cap-height than elegant serifs).
+  const titleMarginOverride = isSerifDisplay ? "" : `
+      /* Chunky display font has more line-box overhead above the cap-height
+         than elegant serifs — pull the title up so the eyebrow→title gap
+         reads consistently with serif-display events. */
+      body.poster-treatment .event-copy .event-title {
+        margin-top: -10px;
+      }`;
+
+  // Dark-mode block: only emitted if primary is LIGHT (page needs a darken
+  // for dark mode). Dark primaries already render correctly in both modes.
+  const darkModeBlock = edge.primaryIsDark ? "" : `
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --poster-primary:   ${edge.secondary};
+          --poster-secondary: ${edge.primary};
+          --poster-text:      ${edge.primary};
+          --poster-panel: color-mix(in oklab, ${edge.secondary} 55%, #000);
+        }
+        html:has(body.poster-treatment),
+        body.poster-treatment,
+        body.poster-treatment header,
+        body.poster-treatment .event-hero,
+        body.poster-treatment .event-details-container,
+        body.poster-treatment footer {
+          background: var(--poster-panel);
+        }
+        body.poster-treatment .logo {
+          content: url("../index/pictures/icons/ELE_Logo_Dark.webp");
+        }
+      }`;
+
+  const headerLogoBlock = headerLogoOverride ? `
+      /* Panel is light → override the poster-treatment default (white logo)
+         with the standard dark-on-transparent logo. */
+      body.poster-treatment .logo {
+        content: url("${headerLogoOverride}");
+      }` : "";
+
+  // Landscape posters render much shorter than portrait posters in the
+  // same column width. Widen the desktop hero column so the poster has
+  // closer visual weight to a portrait one. (Edge case — most posters
+  // are portrait.)
+  const landscapeBlock = edge.isLandscape ? `
+      @media screen and (min-width: 769px) {
+        body.poster-treatment .event-hero-grid {
+          grid-template-columns: minmax(280px, 480px) 1fr;
+        }
+      }` : "";
+
+  // Guest names: join with bullet separator if more than one, else
+  // render solo.
+  const guestNameHtml = guestNames.length === 0
+    ? ""
+    : guestNames.length === 1
+    ? `          <p class="guest-name">${escapeHtml(guestNames[0])}</p>`
+    : `          <p class="guest-name">${guestNames
+        .map(escapeHtml)
+        .join('<span class="dot" aria-hidden="true">•</span>')}</p>`;
+
+  const guestsBlock = guestNames.length === 0
+    ? ""
+    : `        <div class="event-guests">
+          ${specialGuestsLabel
+            ? `<p class="special-guests-label">${escapeHtml(specialGuestsLabel)}</p>`
+            : ""}
+${guestNameHtml}
+        </div>`;
+
+  const descBlock = description
+    ? `        <p class="event-description">${escapeHtml(description)}</p>`
+    : "";
+
+  const ticketsBlock = ticketsUrl
+    ? `          <a href="${ticketsUrl}" target="_blank" rel="noopener" aria-label="Buy tickets for ${escapeHtml(eventTitle)}">
+            <svg class="event-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" role="img" aria-hidden="true" focusable="false">
+              <path fill="currentColor" d="${TICKET_PATH}"/>
+            </svg>
+          </a>`
+    : "";
+
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <!-- Google tag (gtag.js) -->
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-JQ02QRNM1Z"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+
+    gtag('config', 'G-JQ02QRNM1Z');
+  </script>
+
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+
+  <!-- Title Tag for SEO -->
+  <title>${titleTag || `${eventTitle} @ ${venueName} | Eight Limb Entertainment`}</title>
+
+  <!-- Meta Description for SEO -->
+  <meta name="description" content="${escapeHtml(metaDesc || `Eight Limb Entertainment | Presents ${eventTitle} at ${venueName}.`)}">
+
+  <!-- Canonical Tag to Prevent Duplicate Content Issues -->
+  <link rel="canonical" href="https://eightlimbentertainment.com/">
+
+  <!-- Open Graph Meta Tags for Social Media Sharing -->
+  <meta property="og:title" content="Eight Limb Entertainment">
+  <meta property="og:description" content="${escapeHtml(ogDesc || metaDesc || `Eight Limb Entertainment | Presents ${eventTitle} at ${venueName}.`)}">
+  <meta property="og:image" content="https://eightlimbentertainment.com/index/pictures/og-image.png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:type" content="image/png">
+  <meta property="og:url" content="https://eightlimbentertainment.com/">
+  <meta property="og:type" content="website">
+
+  <!-- Twitter Card Meta Tags -->
+  <meta name="twitter:card" content="summary_large_image">
+
+  <!-- Favicon Links -->
+  <link rel="icon" type="image/x-icon" href="../favicon.ico">
+  <link rel="icon" type="image/png" sizes="192x192" href="../index/pictures/favicon/favicon-192x192.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="../index/pictures/favicon/apple-touch-icon.png">
+
+  <!-- Theme Color -->
+  <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#1c1c1e" media="(prefers-color-scheme: dark)">
+
+  <!-- Schema.org Structured Data for SEO -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "Organization",
+    "name": "Eight Limb Entertainment",
+    "url": "https://eightlimbentertainment.com/",
+    "logo": "https://eightlimbentertainment.com/index/pictures/icons/ELE_Logo.webp",
+    "sameAs": [
+      "https://www.facebook.com/8Limbent/",
+      "https://www.instagram.com/eightlimbentertainment"
+    ],
+    "description": "${escapeHtml(schemaDesc || `Eight Limb Entertainment | Presents ${eventTitle} at ${venueName}.`)}"
+  }
+  </script>
+
+  <!-- Fonts and Stylesheets -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;700;900&family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap" rel="stylesheet" />
+  <link rel="preload" as="image" href="../index/pictures/icons/ELE_Logo.webp">
+  <link rel="stylesheet" href="../index/shared.css" />
+  <link rel="stylesheet" href="../events/events-assets/events.css" />
+
+  <!-- Custom CSS to Hide Elements -->
+  <style>
+    .hidden {
+      position: absolute;
+      left: -9999px;
+    }
+  </style>
+${posterFontName ? `<link rel="stylesheet" id="poster-font" href="https://fonts.googleapis.com/css2?family=${encodeURIComponent(posterFontName).replace(/%20/g, "+")}:wght@400;700&display=swap">` : ""}
+  <style id="poster-palette">
+      /* Per-event palette sampled from ${posterFile} via edge band.
+         Strategy: dominant edge colour → panel background; secondary
+         edge colour → text + map dominant. Primary is${edge.primaryIsDark ? "" : " NOT"}
+         already dark, so dark mode ${edge.primaryIsDark ? "keeps it as-is" : "swaps to secondary"}.
+         Map tokens pin --map-base to secondary and --map-accent to primary
+         so the wave's primary→secondary gradient meets the map's
+         secondary-dominant top edge cleanly. */
+      :root {
+        --poster-primary:   ${edge.primary};
+        --poster-secondary: ${edge.secondary};
+        --poster-text:      ${edge.text || edge.secondary};
+        --poster-font-display: ${fontCss};
+        --poster-fg-on-primary:   ${edge.primaryIsDark ? "#fff" : "#111"};
+        --poster-fg-on-secondary: ${edge.secondaryIsDark ? "#fff" : "#111"};
+        --map-base:   ${mapBase};
+        --map-accent: ${mapAccent};
+      }${darkModeBlock}${headerLogoBlock}${landscapeBlock}${titleMarginOverride}${supportingFontOverride}
+    </style>
+</head>
+
+<body class="poster-treatment">
+  <header>
+      <a href="/index.html" aria-label="Logo">
+        <img src="../index/pictures/icons/ELE_Logo.webp" class="logo" alt="Eight Limb Entertainment Logo" width="150" height="150" decoding="async" />
+      </a>
+    <div class="social-media-icons desktop">
+      <a href="https://www.instagram.com/eightlimbentertainment" target="_blank" rel="noopener" aria-label="Instagram">
+        <img src="../index/pictures/icons/instagram.webp" alt="Instagram" width="40" height="40" loading="lazy" decoding="async" />
+      </a>
+      <a href="https://www.facebook.com/8Limbent/" target="_blank" rel="noopener" aria-label="Facebook">
+        <img src="../index/pictures/icons/facebook.webp" alt="Facebook" width="40" height="40" loading="lazy" decoding="async" />
+      </a>
+      <a href="mailto:8limbent@gmail.com" aria-label="Email">
+        <img src="../index/pictures/icons/email.webp" alt="Email" width="40" height="40" loading="lazy" decoding="async" />
+      </a>
+    </div>
+  </header>
+
+  <section class="event-hero">
+    <div class="event-hero-grid">
+      <div class="event-image">
+        <img src="../index/pictures/posters/${posterFile}" class="clickable-event-image" alt="${escapeHtml(eventTitle)} Poster" decoding="async" fetchpriority="high">
+      </div>
+      <div class="event-copy">
+        <p class="ele-presents-label">${escapeHtml(eyebrow)}</p>
+        <h1 class="event-title">${escapeHtml(eventTitle)}</h1>
+${descBlock ? descBlock + "\n" : ""}${guestsBlock ? guestsBlock + "\n" : ""}        <div class="event-meta">
+          <p class="event-venue">${escapeHtml(venueName)}</p>
+          <p class="event-date">${escapeHtml(eventDate)}</p>
+          <div class="event" data-target-date="${targetDate}">
+            <div class="countdown-timer"></div>
+          </div>
+        </div>
+        <div class="facebook-event">
+          <a href="${facebookUrl}" target="_blank" rel="noopener" aria-label="Facebook event for ${escapeHtml(eventTitle)}">
+            <svg class="event-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" role="img" aria-hidden="true" focusable="false">
+              <path fill="currentColor" d="${FB_PATH}"/>
+            </svg>
+          </a>
+${ticketsBlock ? ticketsBlock + "\n" : ""}          <a href="${venue.url}" target="_blank" rel="noopener" aria-label="Open ${escapeHtml(venueName)} in Google Maps">
+            <svg class="event-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" role="img" aria-hidden="true" focusable="false">
+              <path fill="currentColor" d="${PIN_PATH}"/>
+            </svg>
+          </a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <div>
+    <div class="gallery" id="gallery"></div>
+    <div class="modal" id="modal">
+      <img class="arrow left" src="../index/pictures/icons/ChevronWhite.png" alt="Left Arrow">
+      <div class="modal-content">
+        <!-- Image or video will be inserted dynamically -->
+      </div>
+      <img class="arrow right" src="../index/pictures/icons/ChevronWhite-Right.png" alt="Right Arrow">
+    </div>
+  </div>
+
+  <div class="map-container">
+    <svg class="wave-decoration top-wave" role="presentation" aria-hidden="true" preserveAspectRatio="none" viewBox="0 0 1280 51" xmlns="http://www.w3.org/2000/svg">
+${WAVE_TOP_PATHS}
+    </svg>
+    <div id="venue-map" class="map-image" role="img" aria-label="Map of ${escapeHtml(venueName)}"></div>
+    <svg class="wave-decoration bottom-wave" role="presentation" aria-hidden="true" preserveAspectRatio="none" viewBox="0 0 1280 62" xmlns="http://www.w3.org/2000/svg">
+${WAVE_BOTTOM_PATHS}
+    </svg>
+  </div>
+
+  <script>
+    function initMap() {
+      const root = getComputedStyle(document.documentElement);
+      const base   = (root.getPropertyValue('--map-base')   || '${mapBase}').trim();
+      const accent = (root.getPropertyValue('--map-accent') || '${mapAccent}').trim();
+
+      const styles = [
+        { elementType: 'geometry',            stylers: [{ color: base }] },
+        { elementType: 'labels.icon',         stylers: [{ visibility: 'off' }] },
+        { elementType: 'labels.text.fill',    stylers: [{ color: accent }] },
+        { elementType: 'labels.text.stroke',  stylers: [{ color: base }] },
+        { featureType: 'administrative.land_parcel', elementType: 'labels', stylers: [{ visibility: 'off' }] },
+        { featureType: 'administrative.locality',    elementType: 'labels.text.fill', stylers: [{ color: accent }] },
+        { featureType: 'landscape', elementType: 'geometry',         stylers: [{ color: base }] },
+        { featureType: 'poi',       elementType: 'geometry',         stylers: [{ color: base }] },
+        { featureType: 'poi',       elementType: 'labels.text',      stylers: [{ visibility: 'off' }] },
+        { featureType: 'poi.park',  elementType: 'geometry.fill',    stylers: [{ color: accent }] },
+        { featureType: 'road',      elementType: 'geometry',         stylers: [{ color: accent }] },
+        { featureType: 'road',      elementType: 'geometry.stroke',  stylers: [{ color: base }] },
+        { featureType: 'road',      elementType: 'labels.text.fill', stylers: [{ color: base }] },
+        { featureType: 'road',      elementType: 'labels.text.stroke', stylers: [{ color: accent }] },
+        { featureType: 'transit',   elementType: 'geometry',         stylers: [{ color: base }] },
+        { featureType: 'water',     elementType: 'geometry',         stylers: [{ color: accent }] },
+        { featureType: 'water',     elementType: 'labels.text.fill', stylers: [{ color: base }] },
+      ];
+
+      const center = { lat: ${venue.lat}, lng: ${venue.lng} };
+      const searchUrl = '${escapeJs(venue.url)}';
+
+      const map = new google.maps.Map(document.getElementById('venue-map'), {
+        center,
+        zoom: 15,
+        disableDefaultUI: true,
+        zoomControl: false,
+        gestureHandling: 'cooperative',
+        styles
+      });
+
+      const zoomControls = document.createElement('div');
+      zoomControls.className = 'venue-map-zoom-controls';
+      zoomControls.innerHTML = \`
+        <button type="button" class="venue-map-zoom-btn" aria-label="Zoom in">
+          <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" fill="none"/>
+          </svg>
+        </button>
+        <button type="button" class="venue-map-zoom-btn" aria-label="Zoom out">
+          <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <path d="M5 12h14" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" fill="none"/>
+          </svg>
+        </button>
+      \`;
+      const [zInBtn, zOutBtn] = zoomControls.querySelectorAll('button');
+      zInBtn.addEventListener('click', () => map.setZoom(map.getZoom() + 1));
+      zOutBtn.addEventListener('click', () => map.setZoom(map.getZoom() - 1));
+      map.controls[google.maps.ControlPosition.RIGHT_CENTER].push(zoomControls);
+
+      const pinMarker = new google.maps.Marker({
+        position: center,
+        map,
+        title: '${escapeJs(venueName)}',
+        cursor: 'pointer',
+        zIndex: 1,
+        icon: {
+          path: 'M28 0 C12.54 0 0 12.54 0 28 C0 49 28 72 28 72 S56 49 56 28 C56 12.54 43.46 0 28 0 Z',
+          fillColor: accent,
+          fillOpacity: 1,
+          strokeColor: base,
+          strokeWeight: 2,
+          scale: 1,
+          anchor: new google.maps.Point(28, 70)
+        }
+      });
+
+      const logoMarker = new google.maps.Marker({
+        position: center,
+        map,
+        title: '${escapeJs(venueName)}',
+        cursor: 'pointer',
+        zIndex: 2,
+        icon: {
+          url: '${pinLogoUrl}',
+          scaledSize: new google.maps.Size(${pinLogoSize}),
+          anchor: new google.maps.Point(${pinLogoAnchor})
+        }
+      });
+
+      const openSearch = () => window.open(searchUrl, '_blank', 'noopener,noreferrer');
+      pinMarker.addListener('click', openSearch);
+      logoMarker.addListener('click', openSearch);
+    }
+  </script>
+  <script>
+    (function () {
+      var h = window.location.hostname;
+      var isLocal = h === 'localhost' || h === '127.0.0.1' || h === '';
+      var key = isLocal
+        ? 'AIzaSyCq0pj0fzZLuKTZXkVte-k6_vr6hsTTfuM'
+        : 'AIzaSyAMRP1bo-bhDNgR84EjUl7A2si-pRkU3XQ';
+      var s = document.createElement('script');
+      s.async = true;
+      s.defer = true;
+      s.src = 'https://maps.googleapis.com/maps/api/js?key=' + key
+            + '&loading=async&callback=initMap';
+      document.head.appendChild(s);
+    })();
+  </script>
+  <footer>
+    <div class="footer-content">
+      <h2>STAY IN TOUCH</h2>
+      <p>Subscribe to our newsletter</p>
+      <div id="mc_embed_shell">
+        <div id="mc_embed_signup">
+          <form
+            action="https://eightlimbentertainment.us18.list-manage.com/subscribe/post?u=9b61f0337e598c65b4f6a818e&amp;id=00c6726dcd&amp;f_id=00839ee6f0"
+            method="post"
+            id="mc-embedded-subscribe-form"
+            name="mc-embedded-subscribe-form"
+            class="validate"
+            target="_self"
+            novalidate
+          >
+            <div id="mc_embed_signup_scroll">
+              <div class="indicates-required">
+                <span class="asterisk"></span>
+              </div>
+              <div class="mc-field-group">
+                <label for="mce-EMAIL"><span class="asterisk"></span></label>
+                <button
+                  class="invisible-button"
+                  aria-hidden="true"
+                >
+                </button>
+                <input
+                  type="email"
+                  name="EMAIL"
+                  class="required email"
+                  id="mce-EMAIL"
+                  required
+                  value="" placeholder="your@email.com" />
+                <button
+                  type="submit"
+                  name="subscribe"
+                  id="mc-embedded-subscribe"
+                  class="button"
+                  aria-label="Subscribe"
+                >
+                  <svg class="subscribe-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" role="img" aria-hidden="true" focusable="false">
+                    <path fill="currentColor" d="${SUBSCRIBE_PATH}"/>
+                  </svg>
+                </button>
+              </div>
+              <div id="mce-responses" class="clear foot">
+                <div class="response" id="mce-error-response" style="display: none"></div>
+                <div class="response" id="mce-success-response" style="display: none"></div>
+              </div>
+              <div style="position: absolute; left: -5000px" aria-hidden="true">
+                <input
+                  type="text"
+                  name="b_9b61f0337e598c65b4f6a818e_00c6726dcd"
+                  tabindex="-1"
+                  value=""
+                />
+              </div>
+            </div>
+          </form>
+        </div>
+      </div>
+      <!-- Social Media Icons -->
+      <div class="social-media-icons mobile">
+        <a
+          href="https://www.instagram.com/eightlimbentertainment"
+          target="_blank" rel="noopener"
+          aria-label="Instagram"
+        >
+          <img src="../index/pictures/icons/instagram.webp" alt="Instagram" />
+        </a>
+        <a
+          href="https://www.facebook.com/8Limbent/"
+          target="_blank" rel="noopener"
+          aria-label="Facebook"
+        >
+          <img src="../index/pictures/icons/facebook.webp" alt="Facebook" />
+        </a>
+        <a href="mailto:8limbent@gmail.com" aria-label="Email">
+          <img src="../index/pictures/icons/email.webp" alt="Email" />
+        </a>
+      </div>
+      <p>&copy; 2019 Eight Limb Entertainment</p>
+    </div>
+  </footer>
+
+  <!-- JavaScript -->
+  <script src="../index/js/clickable-image.js"></script>
+  <script src="../index/js/emailValidation.js"></script>
+  <script src="../events/events-assets/js/gallery.js"></script>
+  <script src="../events/events-assets/js/eventStatus.js"></script>
+</body>
+</html>
+`;
+}
+
+function escapeHtml(s) {
+  return String(s ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+function escapeJs(s) {
+  return String(s ?? "").replace(/\\/g, "\\\\").replace(/'/g, "\\'");
+}
+
+// =============================================================
+// Main
+// =============================================================
+async function main() {
+  const argFilenames = process.argv.slice(2);
+  const files = argFilenames.length
+    ? argFilenames
+    : (await readdir(EVENTS_DIR)).filter(f => f.endsWith(".html") && !SKIP.has(f));
+
+  const results = [];
+  for (const file of files) {
+    try {
+      const path = join(EVENTS_DIR, file);
+      const html = await readFile(path, "utf8");
+      const data = extractEventData(html, file);
+
+      if (!data.posterFile) throw new Error("no poster filename found");
+      if (!data.eventTitle) throw new Error("no event-title found");
+      if (!data.venueName) throw new Error("no event-venue found");
+
+      const posterPath = join(POSTERS_DIR, data.posterFile);
+      const edgeSampled = await sampleEdgePalette(posterPath);
+
+      // Manual overrides win over edge sampling. Keep the isLandscape +
+      // primaryIsDark fields from the sampled result so the script still
+      // emits the right dark-mode block / landscape column override even
+      // when the colours are hand-set.
+      const manual = MANUAL_PALETTES[file];
+      const edge = manual
+        ? {
+            ...edgeSampled,
+            primary: manual.primary,
+            secondary: manual.secondary,
+            text: manual.text,        // optional; falls back to secondary in template
+            primaryIsDark: hexIsDark(manual.primary),
+            secondaryIsDark: hexIsDark(manual.secondary),
+          }
+        : edgeSampled;
+
+      const venue = VENUES[data.venueName];
+      if (!venue) throw new Error(`no URL mapping for venue "${data.venueName}"`);
+
+      const out = renderTemplate({ ...data, edge, venue });
+      await writeFile(path, out);
+      results.push({ file, status: "ok", edge, venue: data.venueName, manual: !!manual });
+    } catch (err) {
+      results.push({ file, status: "ERROR", error: err.message });
+    }
+  }
+
+  console.log("");
+  for (const r of results) {
+    if (r.status === "ok") {
+      console.log(
+        `  ${r.file.padEnd(45)} ${r.edge.primary}/${r.edge.secondary}  ` +
+        `${r.edge.primaryIsDark ? "(dark)" : "(light)"}  · ${r.venue}`
+      );
+    } else {
+      console.log(`  ${r.file.padEnd(45)} ERROR: ${r.error}`);
+    }
+  }
+  const ok = results.filter(r => r.status === "ok").length;
+  console.log(`\nMigrated ${ok}/${results.length} event pages.`);
+}
+
+main().catch(err => {
+  console.error(err);
+  process.exit(1);
+});
